@@ -23,8 +23,8 @@ Google Chrome Driver: https://chromedriver.chromium.org/
 Make sure your versions of Google Chrome and Google Chrome Driver are synchronized.
 
 ## Suggested Resources
-PurpleAir - manufacuturer of the PurpleAir sensor: https://www2.purpleair.com/
-Panoply - NASA app for viewing HDF/H5 files: https://www.giss.nasa.gov/tools/panoply/download/
-Iowa State Mesonet - Excellent source of weather data: http://www.mesonet.agron.iastate.edu/request/download.phtml
-Wikipedia Article on Timezones - contains all Timezone codes: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-Apte Group UT Austin - the research group I am apart of: http://apte.caee.utexas.edu/
+#### PurpleAir - manufacuturer of the PurpleAir sensor: https://www2.purpleair.com/
+#### Panoply - NASA app for viewing HDF/H5 files: https://www.giss.nasa.gov/tools/panoply/download/
+#### Iowa State Mesonet - Excellent source of weather data: http://www.mesonet.agron.iastate.edu/request/download.phtml
+#### Wikipedia Article on Timezones - contains all Timezone codes: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+#### Apte Group UT Austin - the research group I am apart of: http://apte.caee.utexas.edu/
