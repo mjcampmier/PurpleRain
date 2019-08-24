@@ -1,5 +1,5 @@
 # PurpleRain
-An open source PurpleAir data scraper, manager and visualizer.
+An open source data scraper, manager and visualizer for PurpleAir IoT sensors.
 
 Welcome to PurpleRain. PurpleRain allows users to automate data retrivals from PurpleAir's database at http://www.purpleair.com/sensorlist
 The python script PurpleRain.py contains most of the functions within the module, except for jdutil.py, a script for manipulating Julian
