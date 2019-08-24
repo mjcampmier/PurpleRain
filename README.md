@@ -16,9 +16,10 @@ PurpleRain requires the following python3 libraries (anaconda should cover all):
 numpy, pandas, scipy, time, datetime, math, h5py, selenium, matplotlib, calendar, sklearn & dateutil
 
 PurpleRain requires the following files in addition to the repo:
-Google Chrome: https://www.google.com/chrome/?brand=CHBD&gclid=CjwKCAjwnf7qBRAtEiwAseBO_NoaYQIW1syc1yLs7mmi5OGaKOIYO0ZvpGZ-8BPEZfPEAG-dDy49WRoC9LgQAvD_BwE&gclsrc=aw.ds
 
-Google Chrome Driver: https://chromedriver.chromium.org/
+#### Google Chrome: https://www.google.com/chrome/?brand=CHBD&gclid=CjwKCAjwnf7qBRAtEiwAseBO_NoaYQIW1syc1yLs7mmi5OGaKOIYO0ZvpGZ-8BPEZfPEAG-dDy49WRoC9LgQAvD_BwE&gclsrc=aw.ds
+
+#### Google Chrome Driver: https://chromedriver.chromium.org/
 
 Make sure your versions of Google Chrome and Google Chrome Driver are synchronized.
 
