@@ -28,4 +28,4 @@ Make sure your versions of Google Chrome and Google Chrome Driver are synchroniz
 #### Panoply - NASA app for viewing HDF/H5 files: https://www.giss.nasa.gov/tools/panoply/download/
 #### Iowa State Mesonet - Excellent source of weather data: http://www.mesonet.agron.iastate.edu/request/download.phtml
 #### Wikipedia Article on Timezones - contains all Timezone codes: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-#### Apte Group UT Austin - the research group I am apart of: http://apte.caee.utexas.edu/
+#### Apte Group UT Austin - the research group I am apart of: http://apte.caee.utexas.edu/people/
