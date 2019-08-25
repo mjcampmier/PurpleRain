@@ -44,16 +44,16 @@ def wrapto360(angles):
     return angles
 
 def isFloat(string):
-	'''
-	Determines if the input string
-	can be converted to float.
-	Takes the string as input, and
-	returns false for any error.
-	'''
-	try:
+    '''
+    Determines if the input string
+    can be converted to float.
+    Takes the string as input, and
+    returns false for any error.
+    '''
+    try:
         float(string)
         return True
-	except:
+    except:
         return False
 
 def is_numf(x):
