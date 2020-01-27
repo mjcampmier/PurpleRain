@@ -1,7 +1,7 @@
 '''
 Author: Mark Campmier
 Github/Twitter: @mjcampmier
-Last Edit: 5 December 2019
+Last Edit: 27 Jan 2020
 '''
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
@@ -21,6 +21,7 @@ from matplotlib import cm
 from sklearn import metrics
 from folium.plugins import FloatImage
 from folium.plugins import TimestampedGeoJson
+from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.patches as pat
@@ -222,11 +223,11 @@ def download_sensor(sensor, SD, ED, down_dir, db = []):
 def download_list(sensor_list_file, SD, ED, dir_name, hdfname, tz):
     build_dir(dir_name)
     sensor_list = pd.read_csv(sensor_list_file, header=None)
-    sensor_list.columns = ['Sensor']
+    sensor_list = sensor_list.iloc[:,0]
     df_db = download_database()
-    for i in range(0, len(sensor_list.Sensor)):
-        download_sensor(sensor_list.Sensor[i], SD, ED, dir_name, db = df_db)
-    names = downloaded_file_list(dir_name+'/', sensor_list.Sensor.tolist())
+    for i in range(0, len(sensor_list)):
+        download_sensor(sensor_list[i], SD, ED, dir_name, db = df_db)
+    names = downloaded_file_list(dir_name+'/', sensor_list.tolist())
     build_hdf(names,hdfname, tz, dir_name)
     hdf5_to_mat(hdfname+'.h5')
     print('Succesfully downloaded all sensors.')
@@ -568,10 +569,10 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
                 no_b = False
             sensors.append(name_list[i][0].replace('Primary_','').split('_20')[0])
             print(i,sensors[i])
-            pa = pd.read_csv(dir_name+'/'+pa, skip_blank_lines= False)
-            sa = pd.read_csv(dir_name+'/'+sa, skip_blank_lines= False)
-            pb = pd.read_csv(dir_name+'/'+pb, skip_blank_lines= False)
-            sb = pd.read_csv(dir_name+'/'+sb, skip_blank_lines= False)
+            pa = pd.read_csv(Path(dir_name+'/'+pa), skip_blank_lines= False)
+            sa = pd.read_csv(Path(dir_name+'/'+sa), skip_blank_lines= False)
+            pb = pd.read_csv(Path(dir_name+'/'+pb), skip_blank_lines= False)
+            sb = pd.read_csv(Path(dir_name+'/'+sb), skip_blank_lines= False)
             #pb.iloc[1,-1] = 1776
             pa.dropna(axis=1, how='all',inplace=True)
             pb.dropna(axis=1, how='all',inplace=True)
