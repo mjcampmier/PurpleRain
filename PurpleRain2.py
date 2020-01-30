@@ -1,7 +1,7 @@
 '''
 Author: Mark Campmier
 Github/Twitter: @mjcampmier
-Last Edit: 27 Jan 2020
+Last Edit: 29 Jan 2020
 '''
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
@@ -554,12 +554,12 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
     for i in range(0, len(name_list)):
         try:
             pa = name_list[i][0]
-            sa = name_list[i][1]
         except:
             print('no data from IDX: '+str(i))
         else:
             try:
-                pb = name_list[i][2]
+                pb = name_list[i][1]
+                sa = name_list[i][2]
                 sb = name_list[i][3]
             except:
                 pb = pa
@@ -568,16 +568,11 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
             else:
                 no_b = False
             sensors.append(name_list[i][0].replace('Primary_','').split('_20')[0])
-            print(i,sensors[i])
             pa = pd.read_csv(Path(dir_name+'/'+pa), skip_blank_lines= False)
             sa = pd.read_csv(Path(dir_name+'/'+sa), skip_blank_lines= False)
             pb = pd.read_csv(Path(dir_name+'/'+pb), skip_blank_lines= False)
             sb = pd.read_csv(Path(dir_name+'/'+sb), skip_blank_lines= False)
             #pb.iloc[1,-1] = 1776
-            pa.dropna(axis=1, how='all',inplace=True)
-            pb.dropna(axis=1, how='all',inplace=True)
-            sa.dropna(axis=1, how='all',inplace=True)
-            sb.dropna(axis=1, how='all',inplace=True)
             if (len(pa.columns) == 10):
                 lpa = ['Time','entry_id','PM1_Raw_A', 'PM25_Raw_A','PM10_Raw_A',
                               'Uptime','ADC','Temperature_A','RH_A','PM25_CF_A']
@@ -616,6 +611,10 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
                     sa.drop(dsa, inplace=True, axis=1)
                     pb.drop(dpb, inplace=True, axis=1)
                     sb.drop(dsb, inplace=True, axis=1)
+                    pa.dropna(axis=1, how='all',inplace=True)
+                    pb.dropna(axis=1, how='all',inplace=True)
+                    sa.dropna(axis=1, how='all',inplace=True)
+                    sb.dropna(axis=1, how='all',inplace=True)
                 else:
                     """
                     pa.columns = ['Time','entry_id','PM1_Raw_A', 'PM25_Raw_A','PM10_Raw_A',
@@ -662,6 +661,7 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
 
                 df_summary = pd.concat([df_summary_pa, df_summary_sa, df_summary_pb, df_summary_sb], axis=1)
                 h5file = fill_hdf(h5file, sensors[i], df_summary, pa, sa, pb, sb)
+                print("Filled HDF for "+str(sensors[i]))
             except:
                 print("No PM data stored.")
     h5file.close()
@@ -712,8 +712,11 @@ def downloaded_file_list(directory, sensor_list):
     for i in range(0, len(sensor_list)):
         search_name = directory +'*_'+sensor_list[i].replace(' ','_')+'_*.csv'
         name_list_temp = glob.glob(search_name)
-        name_list = name_list + name_list_temp
-    name_list = np.array(sorted(name_list))
+        for j in range(0,len(name_list_temp)):
+            name_list_temp[j] = name_list_temp[j].split('/')[-1]
+        name_list.append(sorted(name_list_temp))
+    names = name_list
+    '''name_list = np.array(sorted(name_list))
     name_list = np.unique(name_list)
     name_list = name_list.tolist()
     name_idx = name_list.copy()
@@ -731,13 +734,13 @@ def downloaded_file_list(directory, sensor_list):
     names = []
     for i in range(0, len(ri)):
         s = ri[i]
-        e = ri[i]+rc[i]
+        e = ri[i]+1
         names_to_append = [name_idx_primary[s:e], name_idx_secondary[s:e]]
         flat_append = []
         for sublist in names_to_append:
             for item in sublist:
                 flat_append.append(item)
-        names.append(flat_append)
+        names.append(flat_append)'''
     return names
 
 def h5file_query(h5file, query_string):
