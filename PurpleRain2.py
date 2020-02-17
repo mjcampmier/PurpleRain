@@ -1,38 +1,25 @@
 '''
 Author: Mark Campmier
 Github/Twitter: @mjcampmier
-Last Edit: 29 Jan 2020
+Last Edit: 17 Feb 2020
 '''
-from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.firefox.options import Options as FOptions
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from time import sleep
-from scipy.io import savemat
+from scipy import io
 from scipy import stats
 from datetime import datetime, timedelta
 from dateutil import tz
-from matplotlib import cm
 from sklearn import metrics
 from folium.plugins import FloatImage
 from folium.plugins import TimestampedGeoJson
 from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import matplotlib.patches as pat
 import matplotlib.colors as col
-import calendar as cal
 import h5py as h5
 import math
 import glob
 import warnings
 import itertools
-import jdutil as jd
 import folium
 import imageio
 import numpy as np
@@ -41,7 +28,16 @@ import requests
 import os
 import csv
 
+
 warnings.filterwarnings("ignore")
+
+def mean50(x):
+    x_nan_len = len(x[np.isnan(x)])
+    if x_nan_len>15:
+        x_hat = np.nan
+    else:
+        x_hat = np.nanmean(x)
+    return x_hat
 
 def wrapto360(angles):
     '''
@@ -369,29 +365,17 @@ def fill_hdf(h5file, sensor, dfsum, dfpa, dfsa, dfpb, dfsb):
     except:
         print('Failed to fill: '+sensor)
     else:
-        t_time_idx = []
-        pa_time_idx = []
-        sa_time_idx = []
-        pb_time_idx = []
-        sb_time_idx = []
-        
-        for i in range(0, len(dfsum.index.values)):
-            t_time_idx.append(dfsum.index[i].to_julian_date())
-        for i in range(0, len(dfpa['Time'].values)):
-            pa_time_idx.append(pd.to_datetime(dfpa['Time'].iloc[i]).to_julian_date())
-        for i in range(0, len(dfsa['Time'].values)):
-            sa_time_idx.append(pd.to_datetime(dfsa['Time'].iloc[i]).to_julian_date())
-        for i in range(0, len(dfpb['Time'].values)):
-            pb_time_idx.append(pd.to_datetime(dfpb['Time'].iloc[i]).to_julian_date())
-        for i in range(0, len(dfsb['Time'].values)):
-            sb_time_idx.append(pd.to_datetime(dfsb['Time'].iloc[i]).to_julian_date())
+        t_time_idx = df.index.to_julian_date().values
+        pa_time_idx = pd.to_datetime(dfpa['Time']).to_julian_date().values
+        sa_time_idx = pd.to_datetime(dfsa['Time']).to_julian_date().values
+        pb_time_idx = pd.to_datetime(dfpb['Time']).to_julian_date().values
+        sb_time_idx = pd.to_datetime(dfsb['Time']).to_julian_date().values
         
         time.create_dataset('Subsampled_Time', data=t_time_idx)
         t_pa.create_dataset('Primary_Time', data=pa_time_idx)
         t_sa.create_dataset('Secondary_Time', data=sa_time_idx)
         t_pb.create_dataset('Primary_Time', data=pb_time_idx)
         t_sb.create_dataset('Secondary_Time', data=sb_time_idx)
-        
         
         a_r_p1_sub.create_dataset('PM1_Raw_Mean', data=dfsum['PM1_Raw_A_mean'].values)
         a_r_p1_sub.create_dataset('PM1_Raw_Median', data=dfsum['PM1_Raw_A_med'].values)
@@ -616,20 +600,6 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
                     sa.dropna(axis=1, how='all',inplace=True)
                     sb.dropna(axis=1, how='all',inplace=True)
                 else:
-                    """
-                    pa.columns = ['Time','entry_id','PM1_Raw_A', 'PM25_Raw_A','PM10_Raw_A',
-                                  'Uptime','ADC','Temperature_A','RH_A','PM25_CF_A']
-                    sa.columns = ['Time','entry_id','PM03_dl_A','PM05_dl_A','PM1_dl_A',
-                                 'PM25_dl_A','PM5_dl_A','PM10_dl_A','PM1_CF_A','PM10_CF_A']
-                    pb.columns = ['Time','entry_id','PM1_Raw_B', 'PM25_Raw_B','PM10_Raw_B',
-                                  'Uptime','ADC','Pressure_B','__','PM25_CF_B']
-                    sb.columns = ['Time','entry_id','PM03_dl_B','PM05_dl_B','PM1_dl_B',
-                                 'PM25_dl_B','PM5_dl_B','PM10_dl_B','PM1_CF_B','PM10_CF_B']
-                    pa.drop(['entry_id','Uptime','ADC'], inplace=True, axis=1)
-                    sa.drop(['entry_id'],inplace=True, axis = 1)
-                    pb.drop(['entry_id''Uptime','ADC','__'], inplace=True, axis=1)
-                    sb.drop(['entry_id'],inplace=True, axis = 1)
-                    """
                     na_fill = []
                     for kj in range(0, len(lpa)):
                         na_fill.append(np.nan)
@@ -691,7 +661,7 @@ def hdf5_to_mat(hdfile):
     '''
     data = load_dict_from_hdf5(hdfile)
     arr = np.array(list(data.items()))
-    savemat(hdfile[:-3] + '.mat', {'arr':arr})
+    io.savemat(hdfile[:-3] + '.mat', {'arr':arr})
     print('Successfully built .mat file.')
 
 def sensors_from_csv(csvfile):
@@ -716,31 +686,6 @@ def downloaded_file_list(directory, sensor_list):
             name_list_temp[j] = name_list_temp[j].split('/')[-1]
         name_list.append(sorted(name_list_temp))
     names = name_list
-    '''name_list = np.array(sorted(name_list))
-    name_list = np.unique(name_list)
-    name_list = name_list.tolist()
-    name_idx = name_list.copy()
-    name_idx_primary = []
-    name_idx_secondary = []
-    for i in range(0, len(name_idx)):
-        name_temp = name_idx[i]
-        name_temp = name_temp.split('/')[-1]
-        name_temp = name_temp.replace('_B_','_')
-        if (name_temp.find('Primary') != -1):
-            name_idx_primary.append(name_temp)
-        else:
-            name_idx_secondary.append(name_temp)
-    _,ri,rc = np.unique(name_idx_primary, return_index=True, return_counts=True)
-    names = []
-    for i in range(0, len(ri)):
-        s = ri[i]
-        e = ri[i]+1
-        names_to_append = [name_idx_primary[s:e], name_idx_secondary[s:e]]
-        flat_append = []
-        for sublist in names_to_append:
-            for item in sublist:
-                flat_append.append(item)
-        names.append(flat_append)'''
     return names
 
 def h5file_query(h5file, query_string):
@@ -802,11 +747,7 @@ def calibration_plot(h5file, sensor, calibration_df,show):
     A_PM25_hr = h5file_query(h5file, sensor + ' /A/PM_CF/PM25/Subsampled/PM25_CF_Mean')
     B_PM25_hr = h5file_query(h5file, sensor + ' /B/PM_CF/PM25/Subsampled/PM25_CF_Mean')
     julian_time = h5file_query(h5file, sensor + ' /Time/Subsampled_Time')
-    time = []
-    for i in range(0, len(julian_time)):
-        t = jd.jd_to_datetime(julian_time[i])
-        t2 = pd.Timestamp(datetime(t.year,t.month,t.day,t.hour,0,0))
-        time = time + [t2]
+    time = pd.to_datetime(pd.Series(julian_time), origin='D')
     PA = pd.DataFrame([A_PM25_hr,B_PM25_hr])
     PA = PA.T
     PA.index = time
@@ -875,43 +816,6 @@ def calibration_plot(h5file, sensor, calibration_df,show):
     return a_stats, b_stats
 
 def map_df(h5file, sensor_list):
-    placeholder = pd.Timestamp(datetime(1996,10,17,7,0,0))
-    mp_df = pd.DataFrame([np.nan], index=[placeholder])
-    sl = []
-    ab = 0
-    for i in range(0, len(sensor_list)):
-        time = []
-        PM25 = []
-        sensor = sensor_list[i]
-        print(sensor)
-        try:
-            A_PM25 = h5file_query(h5file, sensor+'/A/PM_CF/PM25/Subsampled/PM25_CF_Mean')
-            B_PM25 = h5file_query(h5file, sensor+ '/B/PM_CF/PM25/Subsampled/PM25_CF_Mean')
-            julian_time = h5file_query(h5file, sensor + '/Time/Subsampled_Time')
-            for j in range(0, len(julian_time)):
-                t = jd.jd_to_datetime(julian_time[j])
-                if t.minute >= 30:
-                    t2 = pd.Timestamp(datetime(t.year,t.month,t.day,t.hour+1,0,0))
-                else:
-                    t2 = pd.Timestamp(datetime(t.year,t.month,t.day,t.hour,0,0))
-                time.append(t2)
-                pm25 = A_PM25[j]
-                '''ERROR = np.abs(A_PM25[j] - B_PM25[j])/A_PM25[j]*100
-                if ERROR >= 15:
-                    ab = ab+1
-                    print(ab)'''
-                PM25.append(pm25)
-            temp_df = pd.DataFrame([PM25])
-            temp_df = temp_df.T
-            temp_df.index = time
-            temp_df = temp_df.resample('60T').apply(np.mean)
-            mp_df = pd.concat([mp_df, temp_df], axis=1)
-            sl.append(sensor)
-        except:
-            print('')
-    mp_df.columns = ['placer']+sl
-    mp_df = mp_df.drop(['placer'], axis=1)
-    mp_df = mp_df.drop([placeholder])
     return mp_df
         
 def make_marker(x,y,c,m,sensor):
