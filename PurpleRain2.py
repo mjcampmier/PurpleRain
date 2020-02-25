@@ -1,127 +1,68 @@
 '''
 Author: Mark Campmier
 Github/Twitter: @mjcampmier
-Last Edit: 17 Feb 2020
+Last Edit: 24 Feb 2020
 '''
+# built-in
+import os
+import csv
+import glob
+import warnings
+import requests
+import itertools
+from pathlib import Path
 from time import sleep
+
+# anaconda packages
+import math
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from scipy import io
 from scipy import stats
 from datetime import datetime, timedelta
-from dateutil import tz
 from sklearn import metrics
-from folium.plugins import FloatImage
-from folium.plugins import TimestampedGeoJson
-from pathlib import Path
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.colors as col
-import h5py as h5
-import math
-import glob
-import warnings
-import itertools
-import folium
-import imageio
-import numpy as np
-import pandas as pd
-import requests
-import os
-import csv
 
+# outside dependencies
+import h5py as h5
 
 warnings.filterwarnings("ignore")
 
-def mean50(x):
-    x_nan_len = len(x[np.isnan(x)])
-    if x_nan_len>15:
-        x_hat = np.nan
-    else:
-        x_hat = np.nanmean(x)
-    return x_hat
-
-def wrapto360(angles):
-    '''
-    Wraps negative angles [-180, 180] to
-    [0, 360].
-    '''
-    for i in range(0,len(angles)):
-        angle = angles[i]
-        if angle < 0:
-            angle = 360 + angle
-            angle = np.absolute(angle)
-        else:
-            angle = angle
-        angles[i] = np.absolute(angle)
-    return angles
-
-def isFloat(string):
-    try:
-        float(string)
-        return True
-    except:
-        return False
-
-def is_numf(x):
-    '''
-    Function to determine if input can be converted to float, 
-    if not, returned as Numpy nan.
-    '''
-    try:
-        float(x)
-    except ValueError:
-        y = np.nan
-    except IndexError:
-        y = np.nan
-    else:
-        y = float(x)
-    return y
-
-def is_numi(x):
-    '''
-    Function to determine if input can be converted to integer, 
-    if not, returned as Numpy nan.
-    '''
-    try:
-        int(x)
-    except ValueError:
-        y = np.nan
-    except IndexError:
-        y = np.nan
-    else:
-        y = int(x)
-    return y
 
 def build_dir(dir_path):
-    '''
-    Function to build folder in specified directory path.
-    '''
     try:
         os.makedirs(dir_path)
-        #print('New folder created!')
     except:
         stg = 'Folder already exists'
-        #print('Folder already exists.')
     return dir_path
+
 
 def download_database():
     try:
         r = requests.get('https://www.purpleair.com/json')
+        all_pa = dict(r.json())
+    except JSONDecodeError:
+        print('PurpleAir Server Error, please try again.')
     except:
         print('Fatal Error: Make sure you have an internet connection, wait and try again.')
         return np.nan
     else:
-        all_pa = dict(r.json())
-        df_pa = pd.DataFrame(all_pa['results'])
-        df_pa.drop(['AGE','A_H','DEVICE_LOCATIONTYPE',
-                    'Flag','Hidden',
-                    'ID','LastSeen','Ozone1',
-                    'PM2_5Value','ParentID',
-                    'Stats','Type','Voc',
-                    'humidity','isOwner',
-                    'pressure', 'temp_f',
-                   ], axis=1, inplace=True)
-        print('Database succesfully scraped.')
-        return df_pa
+        try:
+            df_pa = pd.DataFrame(all_pa['results'])
+        except KeyError:
+            print('Connection to PurpleAir database rejected. Wait 2 minutes and check internet connection.')
+        else:
+            df_pa.drop(['AGE','A_H','DEVICE_LOCATIONTYPE',
+                        'Flag','Hidden',
+                        'ID','LastSeen','Ozone1',
+                        'PM2_5Value','ParentID',
+                        'Stats','Type','Voc',
+                        'humidity','isOwner',
+                        'pressure', 'temp_f',
+                       ], axis=1, inplace=True)
+            print('Database succesfully scraped.')
+            return df_pa
+
 
 def sensor_metadata(df_pa, sensor):
     sensor_A = sensor
@@ -139,11 +80,16 @@ def sensor_metadata(df_pa, sensor):
 
         ID = [primary_id_A, secondary_id_A, primary_id_B, secondary_id_B]
         KEYS = [primary_key_A, secondary_key_A, primary_key_B, secondary_key_B]
+        LAT = float(df_pa.Lat[df_pa.Label == sensor_A].item())
+        LON = float(df_pa.Lon[df_pa.Label == sensor_A].item())
     except ValueError:
         print('Name not found. Please check your PurpleAir registration for: ', sensor)
         ID = [np.nan, np.nan, np.nan, np.nan]
         KEYS = [np.nan, np.nan, np.nan, np.nan]
-    return ID, KEYS
+        LAT = np.nan
+        LON = np.nan
+    return ID, KEYS, LAT, LON
+
 
 def download_request(ID, KEY, SD, ED, fname, down_dir):
     SD_list = SD.split('-')
@@ -153,14 +99,14 @@ def download_request(ID, KEY, SD, ED, fname, down_dir):
                       int(SD_list[2]))
     ed = pd.Timestamp(int(ED_list[0]), 
                       int(ED_list[1]), 
-                      int(ED_list[2]))
-    date_ind = pd.date_range(sd, ed, freq='5D')
+                      int(ED_list[2])+1)
+    date_ind = pd.date_range(sd, ed, freq='1D')
     dir_path = build_dir(down_dir+'/'+fname)
-    for i in range(1, len(date_ind)):
+    for i in range(0, len(date_ind)):
         if i != len(date_ind)-1:
             SDi = str(date_ind[i]).split(' ')[0]
             EDi = str(date_ind[i+1]).split(' ')[0]
-            url = 'https://thingspeak.com/channels/'+            ID+'/feed.csv?api_key='+            KEY+'&offset=0&average=0&            round=2&start='+SDi+'%2000:00            :SS&end='+EDi+'%2000:00:00'
+            url = 'https://thingspeak.com/channels/'+                  ID+'/feed.csv?api_key='+                  KEY+'&offset=0&average=0&round=2&start='+                  SDi+'%2000:00:SS&end='+                  EDi+'%2000:00:00'
             r = requests.get(url, allow_redirects=True)
             open(SDi+'.csv', 'wb').write(r.content)
             os.rename(SDi+'.csv', dir_path+'/'+SDi+'.csv')
@@ -173,7 +119,8 @@ def download_request(ID, KEY, SD, ED, fname, down_dir):
     full_name = down_dir+'/'+fname+'.csv'
     full_df.to_csv(full_name, index=False)
     return full_name
-    
+
+
 def assign_field_names(fname, fields):
     df_csv = pd.read_csv(fname)
     if len(df_csv.columns) != len(fields):
@@ -181,14 +128,15 @@ def assign_field_names(fname, fields):
         df_csv.columns = fields
     else:
         df_csv.columns = fields
-    df_csv.to_csv(fname,index=False)
+    df_csv.to_csv(fname, index=False)
+
 
 def download_sensor(sensor, SD, ED, down_dir, db = []):
     if len(db) == 0:
         df_pa = download_database()
     else:
         df_pa = db
-    ID, KEYS = sensor_metadata(df_pa, sensor)
+    ID, KEYS, LAT, LON = sensor_metadata(df_pa, sensor)
     sensor_A = sensor.replace(' ','_')
     sensor_B = sensor_A+'_B'
     sd = SD.replace('-','_')
@@ -214,326 +162,89 @@ def download_sensor(sensor, SD, ED, down_dir, db = []):
     for i in range(0, len(ID)):
         full_name  = download_request(ID[i], KEYS[i], SD, ED, fname[i], down_dir)
         assign_field_names(full_name, fields[i])
-    print('Succesfully downloaded '+str(sensor))
+    print('Successfully downloaded '+str(sensor))
+    return LAT, LON
 
-def download_list(sensor_list_file, SD, ED, dir_name, hdfname, tz):
-    build_dir(dir_name)
-    sensor_list = pd.read_csv(sensor_list_file, header=None)
-    sensor_list = sensor_list.iloc[:,0]
-    df_db = download_database()
-    for i in range(0, len(sensor_list)):
-        download_sensor(sensor_list[i], SD, ED, dir_name, db = df_db)
-    names = downloaded_file_list(dir_name+'/', sensor_list.tolist())
-    build_hdf(names,hdfname, tz, dir_name)
-    hdf5_to_mat(hdfname+'.h5')
-    print('Succesfully downloaded all sensors.')
 
-def time_master(df, col_names, tzstr):
-    '''
-    Aligns time-series data from input dataframe, 
-    assigns datetime as index, converts UTC to local time
-    based on these timezones (http://pytz.sourceforge.net/#country-information).
-    Returns 1-hr Mean, Median, Standard Deviation, 
-    and Max for all Mass, Count, and Meteorological Values
-    '''
-    from_zone = tz.gettz('UTC')
-    to_zone = tz.gettz(tzstr)
-    t = df.Time
-    time_ind = []
-    for i in range(0,len(t)):
-        tstr = t[i].replace(' UTC','')
-        time_ind.append(pd.to_datetime(tstr))
-        time_ind[i] = time_ind[i].replace(tzinfo = from_zone)
-        time_ind[i] = time_ind[i].astimezone(to_zone)
-    df2 = pd.DataFrame(df.iloc[:,1:].values, index=time_ind)
-    df_mean = df2.resample('60T').apply(np.nanmean)
-    df_med  = df2.resample('60T').apply(np.nanmedian)
-    df_std  = df2.resample('60T').apply(np.nanstd)
-    df_max  = df2.resample('60T').apply(np.max)
-    col_names = col_names.values.tolist()[1:]
-    df_mean.columns = [s + '_mean' for s in col_names]
-    df_med.columns  = [s + '_med' for s in col_names]
-    df_std.columns  = [s + '_std' for s in col_names]
-    df_max.columns  = [s + '_max' for s in col_names]
-    df_summary = pd.concat([df_mean, df_med, df_std, df_max], axis=1)
+def time_master(dfpa, dfsa, dfpb, dfsb,tzstr, date_ind):
+    dfpa_ind = pd.to_datetime(dfpa.Time, utc=True)
+    dfsa_ind = pd.to_datetime(dfsa.Time, utc=True)
+    dfpb_ind = pd.to_datetime(dfpb.Time, utc=True)
+    dfsb_ind = pd.to_datetime(dfsb.Time, utc=True)
+    dfpa = dfpa.drop(['Time'], axis=1)
+    dfsa = dfsa.drop(['Time'], axis=1)
+    dfpb = dfpb.drop(['Time'], axis=1)
+    dfsb = dfsb.drop(['Time'], axis=1)
+    dfpa.index = dfpa_ind
+    dfsa.index = dfsa_ind
+    dfpb.index = dfpb_ind
+    dfsb.index = dfsb_ind
+    dfpa.index = dfpa.index.tz_convert(tzstr)
+    dfsa.index = dfsa.index.tz_convert(tzstr)
+    dfpb.index = dfpb.index.tz_convert(tzstr)
+    dfsb.index = dfsb.index.tz_convert(tzstr)
+    df_summary = dfpa.merge(dfsa, how='outer', right_index=True, left_index=True)
+    df_summary = df_summary.merge(dfpb, how='outer', right_index=True, left_index=True)
+    df_summary = df_summary.merge(dfsb, how='outer', right_index=True, left_index=True)
+    df_summary = df_summary.resample('2T').apply(np.nanmean)
+    df_summary = df_summary.reindex(date_ind)
     return df_summary
 
-def file_hdf(sname):
-    '''
-    Intializes hdf file, and builds unique sensor list. 
-    Returns writtable hdf file and unique sensor list.
-    '''
+
+def file_hdf(sname, time_idx):
     h5file = h5.File(sname+'.h5','w')
+    Time = h5file.create_group('Time')
+    Time.create_dataset('Time', data=time_idx)
     return h5file
 
-def fill_hdf(h5file, sensor, dfsum, dfpa, dfsa, dfpb, dfsb):
-    '''
-    First builds hdf file directory, then fills in the 
-    values from [Primary A], [Secondary A], [Primary B],
-    [Secondary B] dataframes. Flushes file to close,
-    and returns h5file object.
-    '''
-    h = 'PM25'
-    t_pa = h5file.create_group(sensor+'/A/P_Time')
-    t_pb = h5file.create_group(sensor+'/B/P_Time') 
-    t_sa = h5file.create_group(sensor+'/A/S_Time') 
-    t_sb = h5file.create_group(sensor+'/B/S_Time')
-    time = h5file.create_group(sensor+'/Time')
-    a_raw = h5file.create_group(sensor+'/A/PM_Raw')
-    a_cf = h5file.create_group(sensor+'/A/PM_CF')
-    a_r_p1 = h5file.create_group(sensor+'/A/PM_Raw/PM1')
-    a_r_p1_data = h5file.create_group(sensor+'/A/PM_Raw/PM1/Data')
-    a_r_p1_sub = h5file.create_group(sensor+'/A/PM_Raw/PM1/Subsampled')
-    a_r_p25 = h5file.create_group(sensor+'/A/PM_Raw/PM25')
-    a_r_p25_data = h5file.create_group(sensor+'/A/PM_Raw/PM25/Data')
-    a_r_p25_sub = h5file.create_group(sensor+'/A/PM_Raw/PM25/Subsampled')
-    a_r_p10 = h5file.create_group(sensor+'/A/PM_Raw/PM10')
-    a_r_p10_data = h5file.create_group(sensor+'/A/PM_Raw/PM10/Data')
-    a_r_p10_sub = h5file.create_group(sensor+'/A/PM_Raw/PM10/Subsampled')
-    a_cf_p1 = h5file.create_group(sensor+'/A/PM_CF/PM1')
-    a_cf_p1_data = h5file.create_group(sensor+'/A/PM_CF/PM1/Data')
-    a_cf_p1_sub = h5file.create_group(sensor+'/A/PM_CF/PM1/Subsampled')
-    a_cf_p25 = h5file.create_group(sensor+'/A/PM_CF/PM25')
-    a_cf_p25_data = h5file.create_group(sensor+'/A/PM_CF/PM25/Data')
-    a_cf_p25_sub = h5file.create_group(sensor+'/A/PM_CF/PM25/Subsampled')
-    a_cf_p10 = h5file.create_group(sensor+'/A/PM_CF/PM10')
-    a_cf_p10_data = h5file.create_group(sensor+'/A/PM_CF/PM10/Data')
-    a_cf_p10_sub = h5file.create_group(sensor+'/A/PM_CF/PM10/Subsampled')
-    a_temp = h5file.create_group(sensor+'/A/Temperature')
-    a_temp_data = h5file.create_group(sensor+'/A/Temperature/Data')
-    a_temp_sub = h5file.create_group(sensor+'/A/Temperature/Subsampled')
-    a_rh = h5file.create_group(sensor+'/A/Relative_Humidity')
-    a_rh_data = h5file.create_group(sensor+'/A/Relative_Humidity/Data')
-    a_rh_sub = h5file.create_group(sensor+'/A/Relative_Humidity/Subsampled')
-    a_counts = h5file.create_group(sensor+'/A/Counts')
-    a_c_03 = h5file.create_group(sensor+'/A/Counts/PM03')
-    a_c_03_data = h5file.create_group(sensor+'/A/Counts/PM03/Data')
-    a_c_03_sub = h5file.create_group(sensor+'/A/Counts/PM03/Subsampled')
-    a_c_05 = h5file.create_group(sensor+'/A/Counts/PM05')
-    a_c_05_data = h5file.create_group(sensor+'/A/Counts/PM05/Data')
-    a_c_05_sub = h5file.create_group(sensor+'/A/Counts/PM05/Subsampled')
-    a_c_1 = h5file.create_group(sensor+'/A/Counts/PM1')
-    a_c_1_data = h5file.create_group(sensor+'/A/Counts/PM1/Data')
-    a_c_1_sub = h5file.create_group(sensor+'/A/Counts/PM1/Subsampled')
-    a_c_25 = h5file.create_group(sensor+'/A/Counts/PM25')
-    a_c_25_data = h5file.create_group(sensor+'/A/Counts/PM25/Data')
-    a_c_25_sub = h5file.create_group(sensor+'/A/Counts/PM25/Subsampled')
-    a_c_10 = h5file.create_group(sensor+'/A/Counts/PM10')
-    a_c_10_data = h5file.create_group(sensor+'/A/Counts/PM10/Data')
-    a_c_10_sub = h5file.create_group(sensor+'/A/Counts/PM10/Subsampled')
-    b_raw = h5file.create_group(sensor+'/B/PM_Raw')
-    b_cf = h5file.create_group(sensor+'/B/PM_CF')
-    b_r_p1 = h5file.create_group(sensor+'/B/PM_Raw/PM1')
-    b_r_p1_data = h5file.create_group(sensor+'/B/PM_Raw/PM1/Data')
-    b_r_p1_sub = h5file.create_group(sensor+'/B/PM_Raw/PM1/Subsampled')
-    b_r_p25 = h5file.create_group(sensor+'/B/PM_Raw/PM25')
-    b_r_p25_data = h5file.create_group(sensor+'/B/PM_Raw/PM25/Data')
-    b_r_p25_sub = h5file.create_group(sensor+'/B/PM_Raw/PM25/Subsampled')
-    b_r_p10 = h5file.create_group(sensor+'/B/PM_Raw/PM10')
-    b_r_p10_data = h5file.create_group(sensor+'/B/PM_Raw/PM10/Data')
-    b_r_p10_sub = h5file.create_group(sensor+'/B/PM_Raw/PM10/Subsampled')
-    b_cf_p1 = h5file.create_group(sensor+'/B/PM_CF/PM1')
-    b_cf_p1_data = h5file.create_group(sensor+'/B/PM_CF/PM1/Data')
-    b_cf_p1_sub = h5file.create_group(sensor+'/B/PM_CF/PM1/Subsampled')
-    b_cf_p25 = h5file.create_group(sensor+'/B/PM_CF/PM25')
-    b_cf_p25_data = h5file.create_group(sensor+'/B/PM_CF/PM25/Data')
-    b_cf_p25_sub = h5file.create_group(sensor+'/B/PM_CF/PM25/Subsampled')
-    b_cf_p10 = h5file.create_group(sensor+'/B/PM_CF/PM10')
-    b_cf_p10_data = h5file.create_group(sensor+'/B/PM_CF/PM10/Data')
-    b_cf_p10_sub = h5file.create_group(sensor+'/B/PM_CF/PM10/Subsampled')
-    b_pressure = h5file.create_group(sensor+'/B/Pressure')
-    b_pressure_data = h5file.create_group(sensor+'/B/Pressure/Data')
-    b_pressure_sub = h5file.create_group(sensor+'/B/Pressure/Subsampled')
-    b_counts = h5file.create_group(sensor+'/B/Counts')
-    b_c_03 = h5file.create_group(sensor+'/B/Counts/PM03')
-    b_c_03_data = h5file.create_group(sensor+'/B/Counts/PM03/Data')
-    b_c_03_sub = h5file.create_group(sensor+'/B/Counts/PM03/Subsampled')
-    b_c_05 = h5file.create_group(sensor+'/B/Counts/PM05')
-    b_c_05_data = h5file.create_group(sensor+'/B/Counts/PM05/Data')
-    b_c_05_sub = h5file.create_group(sensor+'/B/Counts/PM05/Subsampled')
-    b_c_1 = h5file.create_group(sensor+'/B/Counts/PM1')
-    b_c_1_data = h5file.create_group(sensor+'/B/Counts/PM1/Data')
-    b_c_1_sub = h5file.create_group(sensor+'/B/Counts/PM1/Subsampled')
-    b_c_25 = h5file.create_group(sensor+'/B/Counts/PM25')
-    b_c_25_data = h5file.create_group(sensor+'/B/Counts/PM25/Data')
-    b_c_25_sub = h5file.create_group(sensor+'/B/Counts/PM25/Subsampled')
-    b_c_10 = h5file.create_group(sensor+'/B/Counts/PM10')
-    b_c_10_data = h5file.create_group(sensor+'/B/Counts/PM10/Data')
-    b_c_10_sub = h5file.create_group(sensor+'/B/Counts/PM10/Subsampled')
+
+def fill_hdf(h5file, sensor, df, lat, lon):
+    sensor = sensor.split('\\')[-1]
+    location = h5file.create_group('PurpleAir/'+sensor)
+    a_raw = h5file.create_group('PurpleAir/'+sensor+'/A/PM_Raw')
+    a_cf = h5file.create_group('PurpleAir/'+sensor+'/A/PM_CF')
+    a_counts = h5file.create_group('PurpleAir/'+sensor+'/A/Counts')
+    b_raw = h5file.create_group('PurpleAir/'+sensor+'/B/PM_Raw')
+    b_cf = h5file.create_group('PurpleAir/'+sensor+'/B/PM_CF')
+    b_counts = h5file.create_group('PurpleAir/'+sensor+'/B/Counts')
+    met = h5file.create_group('PurpleAir/'+sensor+'/Meteorology')
     try:
-        a_r_p1_data.create_dataset('PM1_Raw', data=dfpa['PM1_Raw_A'].values)
+        a_raw.create_dataset('PM1_Raw', data=df['PM1_Raw_A'].values)
     except:
         print('Failed to fill: '+sensor)
     else:
-        t_time_idx = df.index.to_julian_date().values
-        pa_time_idx = pd.to_datetime(dfpa['Time']).to_julian_date().values
-        sa_time_idx = pd.to_datetime(dfsa['Time']).to_julian_date().values
-        pb_time_idx = pd.to_datetime(dfpb['Time']).to_julian_date().values
-        sb_time_idx = pd.to_datetime(dfsb['Time']).to_julian_date().values
-        
-        time.create_dataset('Subsampled_Time', data=t_time_idx)
-        t_pa.create_dataset('Primary_Time', data=pa_time_idx)
-        t_sa.create_dataset('Secondary_Time', data=sa_time_idx)
-        t_pb.create_dataset('Primary_Time', data=pb_time_idx)
-        t_sb.create_dataset('Secondary_Time', data=sb_time_idx)
-        
-        a_r_p1_sub.create_dataset('PM1_Raw_Mean', data=dfsum['PM1_Raw_A_mean'].values)
-        a_r_p1_sub.create_dataset('PM1_Raw_Median', data=dfsum['PM1_Raw_A_med'].values)
-        a_r_p1_sub.create_dataset('PM1_Raw_Std', data=dfsum['PM1_Raw_A_std'].values)
-        a_r_p1_sub.create_dataset('PM1_Raw_Max', data=dfsum['PM1_Raw_A_max'].values)
-        
-        b_r_p1_data.create_dataset('PM1_Raw', data=dfpb['PM1_Raw_B'].values)
-        b_r_p1_sub.create_dataset('PM1_Raw_Mean',data=dfsum['PM1_Raw_B_mean'].values)
-        b_r_p1_sub.create_dataset('PM1_Raw_Median', data=dfsum['PM1_Raw_B_med'].values)
-        b_r_p1_sub.create_dataset('PM1_Raw_Std', data=dfsum['PM1_Raw_B_std'].values)
-        b_r_p1_sub.create_dataset('PM1_Raw_Max', data=dfsum['PM1_Raw_B_max'].values)
-
-        a_cf_p1_data.create_dataset('PM1_CF', data=dfsa['PM1_CF_A'].values)
-        a_cf_p1_sub.create_dataset('PM1_CF_Mean',data=dfsum['PM1_CF_A_mean'].values)
-        a_cf_p1_sub.create_dataset('PM1_CF_Median', data=dfsum['PM1_CF_A_med'].values)
-        a_cf_p1_sub.create_dataset('PM1_CF_Std', data=dfsum['PM1_CF_A_std'].values)
-        a_cf_p1_sub.create_dataset('PM1_CF_Max',data=dfsum['PM1_CF_A_max'].values)
-
-        b_cf_p1_data.create_dataset('PM1_CF', data=dfsb['PM1_CF_B'].values)
-        b_cf_p1_sub.create_dataset('PM1_CF_Mean', data=dfsum['PM1_CF_B_mean'].values)
-        b_cf_p1_sub.create_dataset('PM1_CF_Median', data=dfsum['PM1_CF_B_med'].values)
-        b_cf_p1_sub.create_dataset('PM1_CF_Std', data=dfsum['PM1_CF_B_std'].values)
-        b_cf_p1_sub.create_dataset('PM1_CF_Max', data=dfsum['PM1_CF_B_max'].values)
-    
-        a_r_p25_data.create_dataset('PM25_Raw', data=dfpa['PM25_Raw_A'].values)
-        a_r_p25_sub.create_dataset('PM25_Raw_Mean', data=dfsum['PM25_Raw_A_mean'].values)
-        a_r_p25_sub.create_dataset('PM25_Raw_Median', data=dfsum['PM25_Raw_A_med'].values)
-        a_r_p25_sub.create_dataset('PM25_Raw_Std', data=dfsum['PM25_Raw_A_std'].values)
-        a_r_p25_sub.create_dataset('PM25_Raw_Max', data=dfsum['PM25_Raw_A_max'].values)
-        
-        b_r_p25_data.create_dataset('PM25_Raw', data=dfpb['PM25_Raw_B'].values)
-        b_r_p25_sub.create_dataset('PM25_Raw_Mean',data=dfsum['PM25_Raw_B_mean'].values)
-        b_r_p25_sub.create_dataset('PM25_Raw_Median', data=dfsum['PM25_Raw_B_med'].values)
-        b_r_p25_sub.create_dataset('PM25_Raw_Std', data=dfsum['PM25_Raw_B_std'].values)
-        b_r_p25_sub.create_dataset('PM25_Raw_Max', data=dfsum['PM25_Raw_B_max'].values)
-
-        a_cf_p25_data.create_dataset('PM25_CF', data=dfpa['PM25_CF_A'].values)
-        a_cf_p25_sub.create_dataset('PM25_CF_Mean',data=dfsum['PM25_CF_A_mean'].values)
-        a_cf_p25_sub.create_dataset('PM25_CF_Median', data=dfsum['PM25_CF_A_med'].values)
-        a_cf_p25_sub.create_dataset('PM25_CF_Std', data=dfsum['PM25_CF_A_std'].values)
-        a_cf_p25_sub.create_dataset('PM25_CF_Max',data=dfsum['PM25_CF_A_max'].values)
-
-        b_cf_p25_data.create_dataset('PM25_CF', data=dfpb['PM25_CF_B'].values)
-        b_cf_p25_sub.create_dataset('PM25_CF_Mean', data=dfsum['PM25_CF_B_mean'].values)
-        b_cf_p25_sub.create_dataset('PM25_CF_Median', data=dfsum['PM25_CF_B_med'].values)
-        b_cf_p25_sub.create_dataset('PM25_CF_Std', data=dfsum['PM25_CF_B_std'].values)
-        b_cf_p25_sub.create_dataset('PM25_CF_Max', data=dfsum['PM25_CF_B_max'].values)
-    
-        a_r_p10_data.create_dataset('PM10_Raw', data=dfpa['PM10_Raw_A'].values)
-        a_r_p10_sub.create_dataset('PM10_Raw_Mean', data=dfsum['PM10_Raw_A_mean'].values)
-        a_r_p10_sub.create_dataset('PM10_Raw_Median', data=dfsum['PM10_Raw_A_med'].values)
-        a_r_p10_sub.create_dataset('PM10_Raw_Std', data=dfsum['PM10_Raw_A_std'].values)
-        a_r_p10_sub.create_dataset('PM10_Raw_Max', data=dfsum['PM10_Raw_A_max'].values)
-        
-        b_r_p10_data.create_dataset('PM10_Raw', data=dfpb['PM10_Raw_B'].values)
-        b_r_p10_sub.create_dataset('PM10_Raw_Mean',data=dfsum['PM10_Raw_B_mean'].values)
-        b_r_p10_sub.create_dataset('PM10_Raw_Median', data=dfsum['PM10_Raw_B_med'].values)
-        b_r_p10_sub.create_dataset('PM10_Raw_Std', data=dfsum['PM10_Raw_B_std'].values)
-        b_r_p10_sub.create_dataset('PM10_Raw_Max', data=dfsum['PM10_Raw_B_max'].values)
-
-        a_cf_p10_data.create_dataset('PM10_CF', data=dfsa['PM10_CF_A'].values)
-        a_cf_p10_sub.create_dataset('PM10_CF_Mean',data=dfsum['PM10_CF_A_mean'].values)
-        a_cf_p10_sub.create_dataset('PM10_CF_Median', data=dfsum['PM10_CF_A_med'].values)
-        a_cf_p10_sub.create_dataset('PM10_CF_Std', data=dfsum['PM10_CF_A_std'].values)
-        a_cf_p10_sub.create_dataset('PM10_CF_Max',data=dfsum['PM10_CF_A_max'].values)
-
-        b_cf_p10_data.create_dataset('PM10_CF', data=dfsb['PM10_CF_B'].values)
-        b_cf_p10_sub.create_dataset('PM10_CF_Mean', data=dfsum['PM10_CF_B_mean'].values)
-        b_cf_p10_sub.create_dataset('PM10_CF_Median', data=dfsum['PM10_CF_B_med'].values)
-        b_cf_p10_sub.create_dataset('PM10_CF_Std', data=dfsum['PM10_CF_B_std'].values)
-        b_cf_p10_sub.create_dataset('PM10_CF_Max', data=dfsum['PM10_CF_B_max'].values)
-        
-        a_temp_data.create_dataset('Raw_Temperature', data=dfpa['Temperature_A'].values)
-        a_temp_sub.create_dataset('Temperature_Mean',data=dfsum['Temperature_A_mean'].values)
-        a_temp_sub.create_dataset('Temperature_Median', data=dfsum['Temperature_A_med'].values)
-        a_temp_sub.create_dataset('Temperature_Std', data=dfsum['Temperature_A_std'].values)
-        a_temp_sub.create_dataset('Temperature_Max', data=dfsum['Temperature_A_max'].values)
-
-        b_pressure_data.create_dataset('Raw_Pressure', data=dfpb['Pressure_B'].values)
-        b_pressure_sub.create_dataset('Pressure_Mean',data=dfsum['Pressure_B_mean'].values)
-        b_pressure_sub.create_dataset('Pressure_Median', data=dfsum['Pressure_B_med'].values)
-        b_pressure_sub.create_dataset('Pressure_Std', data=dfsum['Pressure_B_std'].values)
-        b_pressure_sub.create_dataset('Pressure_Max', data=dfsum['Pressure_B_max'].values)
-
-        a_rh_data.create_dataset('Raw_RH', data=dfpa['RH_A'].values)
-        a_rh_sub.create_dataset('RH_Mean',data=dfsum['RH_A_mean'].values)
-        a_rh_sub.create_dataset('RH_Median', data=dfsum['RH_A_med'].values)
-        a_rh_sub.create_dataset('RH_Std', data=dfsum['RH_A_std'].values)
-        a_rh_sub.create_dataset('RH_Max', data=dfsum['RH_A_max'].values)
-        
-        a_c_03_data.create_dataset('Raw_PM03_dl', data=dfsa['PM03_dl_A'].values)
-        a_c_03_sub.create_dataset('PM03_dl_Mean', data =dfsum['PM03_dl_A_mean'].values)
-        a_c_03_sub.create_dataset('PM03_dl_Median', data =dfsum['PM03_dl_A_med'].values)
-        a_c_03_sub.create_dataset('PM03_dl_Std', data =dfsum['PM03_dl_A_std'].values)
-        a_c_03_sub.create_dataset('PM03_dl_Max', data =dfsum['PM03_dl_A_max'].values)
-        
-        a_c_05_data.create_dataset('Raw_PM05_dl', data=dfsa['PM05_dl_A'].values)
-        a_c_05_sub.create_dataset('PM05_dl_Mean', data =dfsum['PM05_dl_A_mean'].values)
-        a_c_05_sub.create_dataset('PM05_dl_Median', data =dfsum['PM05_dl_A_med'].values)
-        a_c_05_sub.create_dataset('PM05_dl_Std', data =dfsum['PM05_dl_A_std'].values)
-        a_c_05_sub.create_dataset('PM05_dl_Max', data =dfsum['PM05_dl_A_max'].values)
-        
-        a_c_1_data.create_dataset('Raw_PM1_dl', data=dfsa['PM1_dl_A'].values)
-        a_c_1_sub.create_dataset('PM1_dl_Mean', data =dfsum['PM1_dl_A_mean'].values)
-        a_c_1_sub.create_dataset('PM1_dl_Median', data =dfsum['PM1_dl_A_med'].values)
-        a_c_1_sub.create_dataset('PM1_dl_Std', data =dfsum['PM1_dl_A_std'].values)
-        a_c_1_sub.create_dataset('PM1_dl_Max', data =dfsum['PM1_dl_A_max'].values)
-        
-        a_c_25_data.create_dataset('Raw_PM25_dl', data=dfsa['PM25_dl_A'].values)
-        a_c_25_sub.create_dataset('PM25_dl_Mean', data =dfsum['PM25_dl_A_mean'].values)
-        a_c_25_sub.create_dataset('PM25_dl_Median', data =dfsum['PM25_dl_A_med'].values)
-        a_c_25_sub.create_dataset('PM25_dl_Std', data =dfsum['PM25_dl_A_std'].values)
-        a_c_25_sub.create_dataset('PM25_dl_Max', data =dfsum['PM25_dl_A_max'].values)
-        
-        a_c_10_data.create_dataset('Raw_PM10_dl', data=dfsa['PM10_dl_A'].values)
-        a_c_10_sub.create_dataset('PM10_dl_Mean', data =dfsum['PM10_dl_A_mean'].values)
-        a_c_10_sub.create_dataset('PM10_dl_Median', data =dfsum['PM10_dl_A_med'].values)
-        a_c_10_sub.create_dataset('PM10_dl_Std', data =dfsum['PM10_dl_A_std'].values)
-        a_c_10_sub.create_dataset('PM10_dl_Max', data =dfsum['PM10_dl_A_max'].values)
-        
-        b_c_03_data.create_dataset('Raw_PM03_dl', data=dfsb['PM03_dl_B'].values)
-        b_c_03_sub.create_dataset('PM03_dl_Mean', data =dfsum['PM03_dl_B_mean'].values)
-        b_c_03_sub.create_dataset('PM03_dl_Median', data =dfsum['PM03_dl_B_med'].values)
-        b_c_03_sub.create_dataset('PM03_dl_Std', data =dfsum['PM03_dl_B_std'].values)
-        b_c_03_sub.create_dataset('PM03_dl_Max', data =dfsum['PM03_dl_B_max'].values)
-        
-        b_c_05_data.create_dataset('Raw_PM05_dl', data=dfsb['PM05_dl_B'].values)
-        b_c_05_sub.create_dataset('PM05_dl_Mean', data =dfsum['PM05_dl_B_mean'].values)
-        b_c_05_sub.create_dataset('PM05_dl_Median', data =dfsum['PM05_dl_B_med'].values)
-        b_c_05_sub.create_dataset('PM05_dl_Std', data =dfsum['PM05_dl_B_std'].values)
-        b_c_05_sub.create_dataset('PM05_dl_Max', data =dfsum['PM05_dl_B_max'].values)
-        
-        b_c_1_data.create_dataset('Raw_PM1_dl', data=dfsb['PM1_dl_B'].values)
-        b_c_1_sub.create_dataset('PM1_dl_Mean', data =dfsum['PM1_dl_B_mean'].values)
-        b_c_1_sub.create_dataset('PM1_dl_Median', data =dfsum['PM1_dl_B_med'].values)
-        b_c_1_sub.create_dataset('PM1_dl_Std', data =dfsum['PM1_dl_B_std'].values)
-        b_c_1_sub.create_dataset('PM1_dl_Max', data =dfsum['PM1_dl_B_max'].values)
-        
-        b_c_25_data.create_dataset('Raw_PM25_dl', data=dfsb['PM25_dl_B'].values)
-        b_c_25_sub.create_dataset('PM25_dl_Mean', data =dfsum['PM25_dl_B_mean'].values)
-        b_c_25_sub.create_dataset('PM25_dl_Median', data =dfsum['PM25_dl_B_med'].values)
-        b_c_25_sub.create_dataset('PM25_dl_Std', data =dfsum['PM25_dl_B_std'].values)
-        b_c_25_sub.create_dataset('PM25_dl_Max', data =dfsum['PM25_dl_B_max'].values)
-        
-        b_c_10_data.create_dataset('Raw_PM10_dl', data=dfsb['PM10_dl_B'].values)
-        b_c_10_sub.create_dataset('PM10_dl_Mean', data =dfsum['PM10_dl_B_mean'].values)
-        b_c_10_sub.create_dataset('PM10_dl_Median', data =dfsum['PM10_dl_B_med'].values)
-        b_c_10_sub.create_dataset('PM10_dl_Std', data =dfsum['PM10_dl_B_std'].values)
-        b_c_10_sub.create_dataset('PM10_dl_Max', data =dfsum['PM10_dl_B_max'].values)
+        location.create_dataset('Latitude', data=lat)
+        location.create_dataset('Longitude', data=lon)
+        a_raw.create_dataset('PM25_Raw', data=df['PM25_Raw_A'].values, compression="gzip")
+        a_raw.create_dataset('PM10_Raw', data=df['PM10_Raw_A'].values, compression="gzip")
+        a_cf.create_dataset('PM1_CF', data=df['PM1_CF_A'].values, compression="gzip")
+        a_cf.create_dataset('PM25_CF', data=df['PM25_CF_A'].values, compression="gzip")
+        a_cf.create_dataset('PM10_CF', data=df['PM10_CF_A'].values, compression="gzip")
+        b_raw.create_dataset('PM1_Raw', data=df['PM1_Raw_B'].values, compression="gzip")
+        b_raw.create_dataset('PM25_Raw', data=df['PM25_Raw_B'].values, compression="gzip")
+        b_raw.create_dataset('PM10_Raw', data=df['PM10_Raw_B'].values, compression="gzip")
+        b_cf.create_dataset('PM1_CF', data=df['PM1_CF_B'].values, compression="gzip")
+        b_cf.create_dataset('PM25_CF', data=df['PM25_CF_B'].values, compression="gzip")
+        b_cf.create_dataset('PM10_CF', data=df['PM10_CF_B'].values, compression="gzip")
+        met.create_dataset('Temperature', data=df['Temperature_A'].values, compression="gzip")
+        met.create_dataset('Pressure', data=df['Pressure_B'].values, compression="gzip")
+        met.create_dataset('RH', data=df['RH_A'].values, compression="gzip")
+        a_counts.create_dataset('PM03_dl', data=df['PM03_dl_A'].values, compression="gzip")
+        a_counts.create_dataset('PM05_dl', data=df['PM05_dl_A'].values, compression="gzip")
+        a_counts.create_dataset('PM1_dl', data=df['PM1_dl_A'].values, compression="gzip")
+        a_counts.create_dataset('PM25_dl', data=df['PM25_dl_A'].values, compression="gzip")
+        a_counts.create_dataset('PM10_dl', data=df['PM10_dl_A'].values, compression="gzip")
+        b_counts.create_dataset('PM03_dl', data=df['PM03_dl_B'].values, compression="gzip")
+        b_counts.create_dataset('PM05_dl', data=df['PM05_dl_B'].values, compression="gzip")
+        b_counts.create_dataset('PM1_dl', data=df['PM1_dl_B'].values, compression="gzip")
+        b_counts.create_dataset('PM25_dl', data=df['PM25_dl_B'].values, compression="gzip")
+        b_counts.create_dataset('PM10_dl', data=df['PM10_dl_B'].values, compression="gzip")
     h5file.flush()
     return h5file
 
-def build_hdf(name_list, hdfname, tzstr, dir_name):
-    '''
-    Scripts fill_hdf function based on list of unique sensor names.
-    Closes hdfile object.
-    '''
-    h5file= file_hdf(hdfname)
+
+def build_hdf(name_list, hdfname, tzstr, dir_name, date_ind, lat, lon):
+    h5file = file_hdf(hdfname, np.array(date_ind.to_julian_date()))
     sensors = []
     for i in range(0, len(name_list)):
         try:
@@ -552,37 +263,22 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
             else:
                 no_b = False
             sensors.append(name_list[i][0].replace('Primary_','').split('_20')[0])
-            pa = pd.read_csv(Path(dir_name+'/'+pa), skip_blank_lines= False)
-            sa = pd.read_csv(Path(dir_name+'/'+sa), skip_blank_lines= False)
-            pb = pd.read_csv(Path(dir_name+'/'+pb), skip_blank_lines= False)
-            sb = pd.read_csv(Path(dir_name+'/'+sb), skip_blank_lines= False)
-            #pb.iloc[1,-1] = 1776
-            if (len(pa.columns) == 10):
-                lpa = ['Time','entry_id','PM1_Raw_A', 'PM25_Raw_A','PM10_Raw_A',
-                              'Uptime','ADC','Temperature_A','RH_A','PM25_CF_A']
-                lpb = ['Time','entry_id','PM1_Raw_B', 'PM25_Raw_B','PM10_Raw_B',
-                              'Uptime','ADC','Pressure_B','__','PM25_CF_B']
-                lsa = ['Time','entry_id','PM03_dl_A','PM05_dl_A','PM1_dl_A',
-                             'PM25_dl_A','PM5_dl_A','PM10_dl_A','PM1_CF_A','PM10_CF_A']
-                lsb = ['Time','entry_id','PM03_dl_B','PM05_dl_B','PM1_dl_B',
-                             'PM25_dl_B','PM5_dl_B','PM10_dl_B','PM1_CF_B','PM10_CF_B']
-                dpa = ['entry_id','Uptime','ADC']
-                dpb = ['entry_id','Uptime','ADC','__']
-                dsa = ['entry_id']
-                dsb = ['entry_id']
-            else:
-                lpa = ['Time','PM1_Raw_A', 'PM25_Raw_A','PM10_Raw_A',
-                              'Uptime','ADC','Temperature_A','RH_A','PM25_CF_A']
-                lpb = ['Time','PM1_Raw_B', 'PM25_Raw_B','PM10_Raw_B',
-                              'Uptime','ADC','Pressure_B','__','PM25_CF_B']
-                lsa = ['Time','PM03_dl_A','PM05_dl_A','PM1_dl_A',
-                             'PM25_dl_A','PM5_dl_A','PM10_dl_A','PM1_CF_A','PM10_CF_A']
-                lsb = ['Time','PM03_dl_B','PM05_dl_B','PM1_dl_B',
-                             'PM25_dl_B','PM5_dl_B','PM10_dl_B','PM1_CF_B','PM10_CF_B']
-                dpa = ['Uptime','ADC']
-                dpb = ['Uptime','ADC','__']
-                dsa = []
-                dsb = []
+            pa = pd.read_csv(Path(pa), skip_blank_lines= False)
+            sa = pd.read_csv(Path(sa), skip_blank_lines= False)
+            pb = pd.read_csv(Path(pb), skip_blank_lines= False)
+            sb = pd.read_csv(Path(sb), skip_blank_lines= False)
+            lpa = ['Time','entry_id','PM1_Raw_A', 'PM25_Raw_A','PM10_Raw_A',
+                          'Uptime','ADC','Temperature_A','RH_A','PM25_CF_A']
+            lpb = ['Time','entry_id','PM1_Raw_B', 'PM25_Raw_B','PM10_Raw_B',
+                          'Uptime','ADC','Pressure_B','__','PM25_CF_B']
+            lsa = ['Time','entry_id','PM03_dl_A','PM05_dl_A','PM1_dl_A',
+                         'PM25_dl_A','PM5_dl_A','PM10_dl_A','PM1_CF_A','PM10_CF_A']
+            lsb = ['Time','entry_id','PM03_dl_B','PM05_dl_B','PM1_dl_B',
+                         'PM25_dl_B','PM5_dl_B','PM10_dl_B','PM1_CF_B','PM10_CF_B']
+            dpa = ['entry_id','Uptime','ADC']
+            dpb = ['entry_id','Uptime','ADC','__']
+            dsa = ['entry_id']
+            dsb = ['entry_id']
             try:
                 len(pa.iloc[:,2]) != 0
                 len(pb.iloc[:,2]) != 0
@@ -595,10 +291,6 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
                     sa.drop(dsa, inplace=True, axis=1)
                     pb.drop(dpb, inplace=True, axis=1)
                     sb.drop(dsb, inplace=True, axis=1)
-                    pa.dropna(axis=1, how='all',inplace=True)
-                    pb.dropna(axis=1, how='all',inplace=True)
-                    sa.dropna(axis=1, how='all',inplace=True)
-                    sb.dropna(axis=1, how='all',inplace=True)
                 else:
                     na_fill = []
                     for kj in range(0, len(lpa)):
@@ -615,38 +307,27 @@ def build_hdf(name_list, hdfname, tzstr, dir_name):
                     sa.drop(dsa, inplace=True, axis=1)
                     pb.drop(dpb, inplace=True, axis=1)
                     sb.drop(dsb, inplace=True, axis=1)
-
                     pa.iloc[0,0] = '1996-10-17 19:00:00 UTC'
                     pb.iloc[0,0] = '1996-10-17 19:00:00 UTC'
                     sa.iloc[0,0] = '1996-10-17 19:00:00 UTC'
                     sb.iloc[0,0] = '1996-10-17 19:00:00 UTC'
                 if no_b == True:
                     pb.iloc[:,1:] = np.nan
-                    sb.iloc[:,1:] = np.nan 
-
-                df_summary_pa = time_master(pa, pa.columns, tzstr)
-                df_summary_sa = time_master(sa, sa.columns, tzstr)
-                df_summary_pb = time_master(pb, pb.columns, tzstr)
-                df_summary_sb = time_master(sb, sb.columns, tzstr)
-
-                df_summary = pd.concat([df_summary_pa, df_summary_sa, df_summary_pb, df_summary_sb], axis=1)
-                h5file = fill_hdf(h5file, sensors[i], df_summary, pa, sa, pb, sb)
-                print("Filled HDF for "+str(sensors[i]))
+                    sb.iloc[:,1:] = np.nan
+                df_summary = time_master(pa, sa, pb, sb, tzstr, date_ind)
+                h5file = fill_hdf(h5file, sensors[i], df_summary, lat[i], lon[i])
+                print("Filled HDF for "+str(sensors[i].split("'\'")[0].replace('_',' ')))
             except:
                 print("No PM data stored.")
     h5file.close()
 
+
 def load_dict_from_hdf5(filename):
-    '''
-    Builds python native hierchiacal format dictonary from hdf5 file.
-    '''
     with h5.File(filename, 'r') as h5file:
         return recursively_load_dict_contents_from_group(h5file, '/')
 
+
 def recursively_load_dict_contents_from_group(h5file, path):
-    '''
-    Recursively emulates file storage structure from hdf5 file to dictionary.
-    '''
     ans = {}
     for key, item in h5file[path].items():
         if isinstance(item, h5._hl.dataset.Dataset):
@@ -655,29 +336,21 @@ def recursively_load_dict_contents_from_group(h5file, path):
             ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + '/')
     return ans
 
+
 def hdf5_to_mat(hdfile):
-    '''
-    Converts hdf5 file to MATLAB & scipy.io.loadmat compatible .mat file.
-    '''
     data = load_dict_from_hdf5(hdfile)
     arr = np.array(list(data.items()))
     io.savemat(hdfile[:-3] + '.mat', {'arr':arr})
     print('Successfully built .mat file.')
 
+
 def sensors_from_csv(csvfile):
-    '''
-    Converts sensor list from csvfile to list structure in python.
-    Sensor names should be exact, and in the 1st column of the csv.
-    '''
     sensors = pd.read_csv(csvfile)
     sensor_list = sensors.iloc[:,0].values.tolist()
     return sensor_list
 
+
 def downloaded_file_list(directory, sensor_list):
-    '''
-    Function that arranges the names of the downloaded PA
-    csv's into a nested list of grouped sensors.
-    '''
     name_list = []
     for i in range(0, len(sensor_list)):
         search_name = directory +'*_'+sensor_list[i].replace(' ','_')+'_*.csv'
@@ -688,173 +361,38 @@ def downloaded_file_list(directory, sensor_list):
     names = name_list
     return names
 
+
 def h5file_query(h5file, query_string):
     f = h5.File(h5file, 'r')
     array = f[query_string][:]
     return array
 
-def a_vs_b_plot(h5file, sensor, show):
-    '''
-    Generates intra-sensor correlation plots.
-    Very important for understanding the relability
-    of sensor data. Requires the h5file, the sensor
-    name, and the show. Returns the important 
-    correlation statistics, and saves as a png.
-    '''
-    sname = sensor+'_AB_plot.png'
-    A_PM25_hr = h5file_query(h5file, sensor + ' /A/PM_CF/PM25/Subsampled/PM25_CF_Mean')
-    B_PM25_hr = h5file_query(h5file, sensor + ' /B/PM_CF/PM25/Subsampled/PM25_CF_Mean')
-    mask = ~np.isnan(A_PM25_hr) & ~np.isnan(B_PM25_hr)
-    axlim = np.percentile(A_PM25_hr[mask]+B_PM25_hr[mask],95)
-    axlim = int(math.ceil(axlim / 10.0)) * 10
-    m, b, R,_,_ = stats.linregress(A_PM25_hr[mask], B_PM25_hr[mask])
-    B_fitted = A_PM25_hr*m+b
-    r,_ = stats.pearsonr(A_PM25_hr[mask], B_PM25_hr[mask])
-    rmse = metrics.mean_squared_error(B_PM25_hr[mask], B_fitted[mask])
-    nrmse = rmse/np.nanmean(B_PM25_hr)
-    OLS = 'B = '+str(np.round(m,2))+' * A + '+str(np.round(b,2))
-    fig,ax = plt.subplots(figsize=(8,8))
-    plt.plot(A_PM25_hr,B_fitted,c='purple')
-    plt.scatter(A_PM25_hr, B_PM25_hr,c='purple',s=100)
-    plt.plot(A_PM25_hr,A_PM25_hr,c='k')
-    plt.grid(alpha=0.35)
-    plt.xlabel('Sensor A PM$_{2.5}$ ($\mu$g/m$^3$)',fontname='Arial', fontsize=20)
-    plt.ylabel('Sensor B PM$_{2.5}$ ($\mu$g/m$^3$)',fontname='Arial', fontsize=20)
-    plt.xlim([0, axlim])
-    plt.ylim([0, axlim])
-    plt.title(sensor, fontname='Arial', fontsize=24)
-    plt.rcParams.update({'font.size': 16, 'font.sans-serif':['Arial']})
-    plt.legend(['1-hr Average Measurement','1:1 Line',OLS], 
-               framealpha=1, edgecolor='k',loc=2)
-    plt.text(.68*axlim,.15*axlim,'OLS R$^2$       : '+ str(np.round(R**2,3)))
-    plt.text(.68*axlim,.10*axlim,"Pearson's r : "+str(np.round(r,3)))
-    plt.text(.68*axlim,.05*axlim, "NRMSE      : "+str(np.round(nrmse,3)))
-    plt.savefig(sname)
-    if show==True:
-        plt.show()
-    return m, b, R, r, nrmse
 
-def calibration_plot(h5file, sensor, calibration_df,show):
-    '''
-    Generates calibration correlation plots.
-    Very important for understanding the relability
-    of sensor data. Requires the h5file, the sensor
-    name, a calibration dataframe, and the show. 
-    Returns the important correlation statistics, 
-    and saves as a png.
-    '''
-    sname = sensor+'_Calibration_plot.png'
-    A_PM25_hr = h5file_query(h5file, sensor + ' /A/PM_CF/PM25/Subsampled/PM25_CF_Mean')
-    B_PM25_hr = h5file_query(h5file, sensor + ' /B/PM_CF/PM25/Subsampled/PM25_CF_Mean')
-    julian_time = h5file_query(h5file, sensor + ' /Time/Subsampled_Time')
-    time = pd.to_datetime(pd.Series(julian_time), origin='D')
-    PA = pd.DataFrame([A_PM25_hr,B_PM25_hr])
-    PA = PA.T
-    PA.index = time
-    PA_Calibration = pd.concat([PA, calibration_df])
-    PA_Calibration.columns = [sensor+'A',sensor+'B','Calibration']
-    PA_Calibration = PA_Calibration.resample('60T').apply(np.nanmean)
-    mask = ~np.isnan(
-        PA_Calibration.iloc[:,0].values) & ~np.isnan(
-        PA_Calibration.iloc[:,1].values) & ~np.isnan(
-        PA_Calibration.iloc[:,2].values)
-
-    A = PA_Calibration.iloc[:,0].values[mask]
-    B = PA_Calibration.iloc[:,1].values[mask]
-    C = PA_Calibration.iloc[:,2].values[mask]
-    I = PA_Calibration.index[mask]
-    ma, ba, Ra,_,_ = stats.linregress(C,A)
-    mb, bb, Rb,_,_ = stats.linregress(C,B)
-    OLSA = 'PA = '+str(np.round(ma,3))+' * Calibration + ' + str(np.round(ba,3))
-    OLSB = 'PA = '+str(np.round(mb,3))+' * Calibration + ' + str(np.round(bb,3))
-    A_fitted = C*ma+ba
-    B_fitted = C*mb+bb
-    axlim = np.percentile(A+C,95)
-    axlim = int(math.ceil(axlim / 10.0)) * 10
-    ra,_ = stats.pearsonr(A, C)
-    rmsea = metrics.mean_squared_error(A, A_fitted)
-    nrmsea = rmse/np.nanmean(A)
-    rb,_ = stats.pearsonr(B, C)
-    rmseb = metrics.mean_squared_error(B, B_fitted)
-    nrmseb = rmse/np.nanmean(B)
-    fig,ax = plt.subplots(1,2,figsize=(17,8))
-    ax[0].scatter(A,C,c='purple')
-    ax[0].plot(C, A_fitted, c='purple')
-    ax[0].plot(C, C, c='k')
-    ax[0].set_xlim([0,axlim])
-    ax[0].set_ylim([0,axlim])
-    ax[0].grid(alpha=0.35)
-    ax[0].set_xlabel('Calibration PM$_{2.5}$ ($\mu$g/m$^3$)',fontname='Arial', fontsize=20)
-    ax[0].set_ylabel('PA PM$_{2.5}$ ($\mu$g/m$^3$)',fontname='Arial', fontsize=20)
-    plt.rcParams.update({'font.size': 16, 'font.sans-serif':['Arial']})
-    ax[0].legend(['1-hr Average Measurement','1:1 Line',OLSA], 
-                   framealpha=1, edgecolor='k',loc=2)
-    ax[0].text(.68*axlim,.15*axlim,'OLS R$^2$       : '+ str(np.round(Ra**2,3)))
-    ax[0].text(.68*axlim,.10*axlim,"Pearson's r : "+str(np.round(ra,3)))
-    ax[0].text(.68*axlim,.05*axlim, "NRMSE      : "+str(np.round(nrmsea,3)))
-    ax[0].set_title(sensor+'A OLS Calibration')
-    ax[1].scatter(B,C,c='purple')
-    ax[1].plot(C, B_fitted, c='purple')
-    ax[1].plot(C, C, c='k')
-    ax[1].set_xlim([0,axlim])
-    ax[1].set_ylim([0,axlim])
-    ax[1].grid(alpha=0.35)
-    ax[1].set_xlabel('Calibration PM$_{2.5}$ ($\mu$g/m$^3$)',fontname='Arial', fontsize=20)
-    ax[1].set_ylabel('PA PM$_{2.5}$ ($\mu$g/m$^3$)',fontname='Arial', fontsize=20)
-    plt.rcParams.update({'font.size': 16, 'font.sans-serif':['Arial']})
-    ax[1].legend(['1-hr Average Measurement','1:1 Line',OLSB], 
-                   framealpha=1, edgecolor='k',loc=2)
-    ax[1].text(.68*axlim,.15*axlim,'OLS R$^2$       : '+ str(np.round(Rb**2,3)))
-    ax[1].text(.68*axlim,.10*axlim,"Pearson's r : "+str(np.round(rb,3)))
-    ax[1].text(.68*axlim,.05*axlim, "NRMSE      : "+str(np.round(nrmseb,3)))
-    ax[1].set_title(sensor+'B OLS Calibration')
-    plt.savefig(sname)
-    if show==True:
-        plt.show()
-    a_stats = [ma, ba, Ra, ra, nrmsea]
-    b_stats = [mb, bb, Rb, rb, nrmseb]
-    return a_stats, b_stats
-
-def map_df(h5file, sensor_list):
-    return mp_df
-        
-def make_marker(x,y,c,m,sensor):
-    cmap = mpl.cm.get_cmap('hot_r')
-    rgba = col.to_hex(cmap(c/65))
-    folium.CircleMarker(
-        radius=10,
-        location=[x, y],
-        popup=sensor+'\n Concentration: '+str(np.round(c,2))+' ug/m3',
-        color=rgba,
-        fill=True,
-        fillcolor=rgba,
-        fill_opacity=1.0
-    ).add_to(m)
-    return m
-    
-def make_map(x,y,c,latlon,sname):
-    m = folium.Map(location=[x, y],
-               tiles='https://tiles.wmflabs.org/osm-no-labels/{z}/{x}/{y}.png ',
-               attr='Wikimedia')
-    for i in range(0,len(latlon)):
-        sensor = latlon.Sensor[i]
-        xs = latlon.Latitude[i]
-        ys = latlon.Longitude[i]
-        conc = c[i]
-        make_marker(xs,ys,conc,m, sensor)
-    m.save(sname)
-    return m
-
-def save_map(html_list, bulk, driver_path):
-    driver = webdriver.Chrome(driver_path)
-    if bulk == False:
-        driver.get('file://'+html_list)
-        sleep(2.5)
-        driver.save_screenshot(html_list.replace('html','png'))
-    else:
-        for i in range(0, len(html_list)):
-            html = html_list[i]
-            driver.get('file://'+html_list)
-            sleep(2.5)
-            driver.save_screenshot(html.replace('html','png'))
-    driver.close()
+def download_list(sensor_list_file, SD, ED, dir_name, hdfname, tz):
+    build_dir(dir_name)
+    sensor_list = pd.read_csv(sensor_list_file, header=None)
+    sensor_list = sensor_list.iloc[:,0]
+    df_db = download_database()
+    LAT,LON = [],[]
+    for i in range(0, len(sensor_list)):
+        lat, lon = download_sensor(sensor_list[i], SD, ED, dir_name, db = df_db)
+        LAT.append(lat)
+        LON.append(lon)
+    names = downloaded_file_list(dir_name+'/', sensor_list.tolist())
+    SD = SD.split('-')
+    ED = ED.split('-')
+    start_date = pd.Timestamp(year=int(SD[0]), 
+                              month=int(SD[1]), 
+                              day=int(SD[2]),
+                              hour=0,minute=0,second=0, 
+                              tz='UTC')
+    end_date = pd.Timestamp(year=int(ED[0]),
+                            month=int(ED[1]),
+                            day=int(ED[2]),
+                            hour=23,minute=59,second=59,
+                            tz='UTC')
+    date_ind = pd.date_range(start_date, end_date, freq='2T')
+    date_ind = date_ind.tz_convert(tz)
+    build_hdf(names, hdfname, tz, dir_name, date_ind, LAT, LON)
+    hdf5_to_mat(hdfname+'.h5')
+    print('Successfully downloaded all sensors.')
