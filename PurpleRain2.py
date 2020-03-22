@@ -1,7 +1,7 @@
 '''
 Author: Mark Campmier
 Github/Twitter: @mjcampmier
-Last Edit: 24 Feb 2020
+Last Edit: 22 March 2020
 '''
 # built-in
 import os
@@ -279,46 +279,41 @@ def build_hdf(name_list, hdfname, tzstr, dir_name, date_ind, lat, lon):
             dpb = ['entry_id','Uptime','ADC','__']
             dsa = ['entry_id']
             dsb = ['entry_id']
-            try:
-                len(pa.iloc[:,2]) != 0
-                len(pb.iloc[:,2]) != 0
-                if (pa.shape[0] > 0) :
-                    pa.columns = lpa
-                    sa.columns = lsa
-                    pb.columns = lpb
-                    sb.columns = lsb
-                    pa.drop(dpa, inplace=True, axis=1)
-                    sa.drop(dsa, inplace=True, axis=1)
-                    pb.drop(dpb, inplace=True, axis=1)
-                    sb.drop(dsb, inplace=True, axis=1)
-                else:
-                    na_fill = []
-                    for kj in range(0, len(lpa)):
-                        na_fill.append(np.nan)
-                    pa = pd.DataFrame(na_fill).T
-                    sa = pd.DataFrame(na_fill).T
-                    pb = pd.DataFrame(na_fill).T
-                    sb = pd.DataFrame(na_fill).T
-                    pa.columns = lpa
-                    sa.columns = lsa
-                    pb.columns = lpb
-                    sb.columns = lsb
-                    pa.drop(dpa, inplace=True, axis=1)
-                    sa.drop(dsa, inplace=True, axis=1)
-                    pb.drop(dpb, inplace=True, axis=1)
-                    sb.drop(dsb, inplace=True, axis=1)
-                    pa.iloc[0,0] = '1996-10-17 19:00:00 UTC'
-                    pb.iloc[0,0] = '1996-10-17 19:00:00 UTC'
-                    sa.iloc[0,0] = '1996-10-17 19:00:00 UTC'
-                    sb.iloc[0,0] = '1996-10-17 19:00:00 UTC'
-                if no_b == True:
-                    pb.iloc[:,1:] = np.nan
-                    sb.iloc[:,1:] = np.nan
-                df_summary = time_master(pa, sa, pb, sb, tzstr, date_ind)
-                h5file = fill_hdf(h5file, sensors[i], df_summary, lat[i], lon[i])
-                print("Filled HDF for "+str(sensors[i].split("'\'")[0].replace('_',' ')))
-            except:
-                print("No PM data stored.")
+            if (pa.shape[0] > 0):
+                pa.columns = lpa
+                sa.columns = lsa
+                pb.columns = lpb
+                sb.columns = lsb
+                pa.drop(dpa, inplace=True, axis=1)
+                sa.drop(dsa, inplace=True, axis=1)
+                pb.drop(dpb, inplace=True, axis=1)
+                sb.drop(dsb, inplace=True, axis=1)
+            else:
+                na_fill = []
+                for kj in range(0, len(lpa)):
+                    na_fill.append(np.nan)
+                pa = pd.DataFrame(na_fill).T
+                sa = pd.DataFrame(na_fill).T
+                pb = pd.DataFrame(na_fill).T
+                sb = pd.DataFrame(na_fill).T
+                pa.columns = lpa
+                sa.columns = lsa
+                pb.columns = lpb
+                sb.columns = lsb
+                pa.drop(dpa, inplace=True, axis=1)
+                sa.drop(dsa, inplace=True, axis=1)
+                pb.drop(dpb, inplace=True, axis=1)
+                sb.drop(dsb, inplace=True, axis=1)
+                pa.iloc[0, 0] = '1996-10-17 19:00:00 UTC'
+                pb.iloc[0, 0] = '1996-10-17 19:00:00 UTC'
+                sa.iloc[0, 0] = '1996-10-17 19:00:00 UTC'
+                sb.iloc[0, 0] = '1996-10-17 19:00:00 UTC'
+            if no_b == True:
+                pb.iloc[:, 1:] = np.nan
+                sb.iloc[:, 1:] = np.nan
+            df_summary = time_master(pa, sa, pb, sb, tzstr, date_ind)
+            h5file = fill_hdf(h5file, str(sensors[i].split("'/'")[0].replace('_', ' ')), df_summary, lat[i], lon[i])
+            print("Filled HDF for " + str(sensors[i].split("'/'")[0].replace('_', ' ')))
     h5file.close()
 
 
