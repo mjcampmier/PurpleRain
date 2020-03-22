@@ -391,10 +391,3 @@ def download_list(sensor_list_file, SD, ED, dir_name, hdfname, tz):
     build_hdf(names, hdfname, tz, dir_name, date_ind, LAT, LON)
     hdf5_to_mat(hdfname+'.h5')
     print('Successfully downloaded all sensors.')
-
-
-download_list('C:\\Users\\Mark\\Downloads\\Sensor_list_2.csv',
-              '2020-03-01','2020-03-08',
-              'C:\\Users\\Mark\\Downloads\\Test',
-              'test_h',
-              'Asia/Calcutta')
