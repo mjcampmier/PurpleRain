@@ -252,10 +252,6 @@ def build_hdf(name_list, hdfname, tzstr, date_ind, lat, lon):
                 pb = name_list[i][1]
                 sa = name_list[i][2]
                 sb = name_list[i][3]
-                print(pa)
-                print(sa)
-                print(pb)
-                print(sb)
             except:
                 pb = pa
                 sb = sa
