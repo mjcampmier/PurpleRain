@@ -87,7 +87,6 @@ def sensor_metadata(df_pa, sensor):
 def download_request(id_, key, sd, ed, fname, down_dir):
     SD_list = sd.split('_')
     ED_list = ed.split('_')
-    print(sd)
     sd = pd.Timestamp(int(SD_list[0]),
                       int(SD_list[1]),
                       int(SD_list[2]))
