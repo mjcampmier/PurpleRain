@@ -259,10 +259,10 @@ def build_hdf(name_list, hdfname, tzstr, date_ind, lat, lon):
             else:
                 no_b = False
             sensors.append(name_list[i][0].replace('Primary_', '').split('_20')[0])
-            pa = pd.read_csv(Path(pa), skip_blank_lines=False)
-            sa = pd.read_csv(Path(sa), skip_blank_lines=False)
-            pb = pd.read_csv(Path(pb), skip_blank_lines=False)
-            sb = pd.read_csv(Path(sb), skip_blank_lines=False)
+            pa = pd.read_csv(pa, skip_blank_lines=False)
+            sa = pd.read_csv(sa, skip_blank_lines=False)
+            pb = pd.read_csv(pb, skip_blank_lines=False)
+            sb = pd.read_csv(sb, skip_blank_lines=False)
             lpa = ['Time', 'entry_id', 'PM1_Raw_A', 'PM25_Raw_A', 'PM10_Raw_A',
                    'Uptime', 'ADC', 'Temperature_A', 'RH_A', 'PM25_CF_A']
             lpb = ['Time', 'entry_id', 'PM1_Raw_B', 'PM25_Raw_B', 'PM10_Raw_B',
@@ -347,8 +347,6 @@ def downloaded_file_list(directory, sensor_list):
     for i in range(0, len(sensor_list)):
         search_name = os.path.join(directory, '*_' + sensor_list[i].replace(' ', '_') + '_*.csv')
         name_list_temp = glob.glob(search_name)
-        for j in range(0, len(name_list_temp)):
-            name_list_temp[j] = name_list_temp[j].split('/')[-1]
         name_list.append(sorted(name_list_temp))
     names = name_list
     return names
