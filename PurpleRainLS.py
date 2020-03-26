@@ -30,30 +30,19 @@ def build_dir(dir_path):
 
 
 def download_database():
-    try:
-        r = requests.get('https://www.purpleair.com/json')
-        all_pa = dict(r.json())
-    except JSONDecodeError:
-        print('PurpleAir Server Error, please try again.')
-    except:
-        print('Fatal Error: Make sure you have an internet connection, wait and try again.')
-        return np.nan
-    else:
-        try:
-            df_pa = pd.DataFrame(all_pa['results'])
-        except KeyError:
-            print('Connection to PurpleAir database rejected. Wait 2 minutes and check internet connection.')
-        else:
-            df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
-                        'Flag', 'Hidden',
-                        'ID', 'LastSeen', 'Ozone1',
-                        'PM2_5Value', 'ParentID',
-                        'Stats', 'Type', 'Voc',
-                        'humidity', 'isOwner',
-                        'pressure', 'temp_f',
-                        ], axis=1, inplace=True)
-            print('Database successfully scraped.')
-            return df_pa
+    r = requests.get('https://www.purpleair.com/json')
+    all_pa = dict(r.json())
+    df_pa = pd.DataFrame(all_pa['results'])
+    df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
+                'Flag', 'Hidden',
+                'ID', 'LastSeen', 'Ozone1',
+                'PM2_5Value', 'ParentID',
+                'Stats', 'Type', 'Voc',
+                'humidity', 'isOwner',
+                'pressure', 'temp_f',
+                ], axis=1, inplace=True)
+    print('Database successfully scraped.')
+    return df_pa
 
 
 def sensor_metadata(df_pa, sensor):
@@ -93,7 +82,7 @@ def download_request(id_, key, sd, ed, fname, down_dir):
                       int(ED_list[1]),
                       int(ED_list[2]) + 1)
     date_ind = pd.date_range(sd, ed, freq='1D')
-    dir_path = build_dir(down_dir + '/' + fname)
+    dir_path = build_dir(os.path.join(down_dir, fname))
     for i in range(0, len(date_ind)):
         if i != len(date_ind) - 1:
             SDi = str(date_ind[i]).split(' ')[0]
@@ -359,27 +348,27 @@ def h5file_query(h5file, query_string):
     return array
 
 
-def download_list(sensor_list_file, SD, ED, hdfname, tz):
+def download_list(sensor_list_file, sd, ed, hdfname, tz):
     dir_name = build_dir(hdfname)
     sensor_list = pd.read_csv(sensor_list_file, header=None)
     sensor_list = sensor_list.iloc[:, 0]
     df_db = download_database()
     LAT, LON = [], []
     for i in range(0, len(sensor_list)):
-        lat, lon = download_sensor(sensor_list[i], SD, ED, hdfname, db=df_db)
+        lat, lon = download_sensor(sensor_list[i], sd, ed, hdfname, db=df_db)
         LAT.append(lat)
         LON.append(lon)
     names = downloaded_file_list(dir_name, sensor_list.tolist())
-    SD = SD.split('-')
-    ED = ED.split('-')
-    start_date = pd.Timestamp(year=int(SD[0]),
-                              month=int(SD[1]),
-                              day=int(SD[2]),
+    sd = sd.split('-')
+    ed = ed.split('-')
+    start_date = pd.Timestamp(year=int(sd[0]),
+                              month=int(sd[1]),
+                              day=int(sd[2]),
                               hour=0, minute=0, second=0,
                               tz='UTC')
-    end_date = pd.Timestamp(year=int(ED[0]),
-                            month=int(ED[1]),
-                            day=int(ED[2]),
+    end_date = pd.Timestamp(year=int(ed[0]),
+                            month=int(ed[1]),
+                            day=int(ed[2]),
                             hour=23, minute=59, second=59,
                             tz='UTC')
     date_ind = pd.date_range(start_date, end_date, freq='2T')
