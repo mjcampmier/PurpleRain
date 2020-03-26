@@ -106,13 +106,13 @@ def download_request(id_, key, sd, ed, fname, down_dir):
             r = requests.get(url, allow_redirects=True)
             open(SDi + '.csv', 'wb').write(r.content)
             os.rename(SDi + '.csv', dir_path + '/' + SDi + '.csv')
-    flist = glob.glob(dir_path + '/*.csv')
+    flist = glob.glob(os.path.join(dir_path, '*.csv'))
     full_df = pd.read_csv(flist[0])
     for i in range(1, len(flist)):
         temp_df = pd.read_csv(flist[i])
         full_df = pd.concat([full_df, temp_df])
     full_df = full_df.sort_values(by=['created_at'])
-    full_name = down_dir + '/' + fname + '.csv'
+    full_name = os.path.join(down_dir, fname + '.csv')
     full_df.to_csv(full_name, index=False)
     return full_name
 
@@ -197,7 +197,6 @@ def file_hdf(sname, time_idx):
 
 
 def fill_hdf(h5file, sensor, df, lat, lon):
-    sensor = sensor.split('\\')[-1]
     location = h5file.create_group('PurpleAir/' + sensor)
     a_raw = h5file.create_group('PurpleAir/' + sensor + '/A/PM_Raw')
     a_cf = h5file.create_group('PurpleAir/' + sensor + '/A/PM_CF')
@@ -310,8 +309,9 @@ def build_hdf(name_list, hdfname, tzstr, date_ind, lat, lon):
                 pb.iloc[:, 1:] = np.nan
                 sb.iloc[:, 1:] = np.nan
             df_summary = time_master(pa, sa, pb, sb, tzstr, date_ind)
-            h5file = fill_hdf(h5file, str(sensors[i].split("'/'")[0].replace('_', ' ')), df_summary, lat[i], lon[i])
-            print("Filled HDF for " + str(sensors[i].split("'/'")[0].replace('_', ' ')))
+            sensor = str(os.path.basename(sensors[i]).split('.')[0])
+            h5file = fill_hdf(h5file, sensor, df_summary, lat[i], lon[i])
+            print("Filled HDF for " + sensor)
     h5file.close()
 
 
