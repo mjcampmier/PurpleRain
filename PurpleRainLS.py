@@ -104,7 +104,7 @@ def download_request(id_, key, sd, ed, fname, down_dir):
                   '%2000:00:SS&end=' + EDi + '%2000:00:00 '
             r = requests.get(url, allow_redirects=True)
             open(SDi + '.csv', 'wb').write(r.content)
-            os.rename(SDi + '.csv', dir_path + '/' + SDi + '.csv')
+            os.rename(SDi + '.csv', os.path.join(dir_path, SDi + '.csv'))
     flist = glob.glob(os.path.join(dir_path, '*.csv'))
     full_df = pd.read_csv(flist[0])
     for i in range(1, len(flist)):
