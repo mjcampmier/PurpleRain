@@ -30,19 +30,31 @@ def build_dir(dir_path):
 
 
 def download_database():
-    r = requests.get('https://www.purpleair.com/json')
-    all_pa = dict(r.json())
-    df_pa = pd.DataFrame(all_pa['results'])
-    df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
-                'Flag', 'Hidden',
-                'ID', 'LastSeen', 'Ozone1',
-                'PM2_5Value', 'ParentID',
-                'Stats', 'Type', 'Voc',
-                'humidity', 'isOwner',
-                'pressure', 'temp_f',
-                ], axis=1, inplace=True)
-    print('Database successfully scraped.')
-    return df_pa
+    success = False
+    count = 0
+    while count < 10:
+        try:
+            r = requests.get('https://www.purpleair.com/json')
+            all_pa = dict(r.json())
+            df_pa = pd.DataFrame(all_pa['results'])
+            df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
+                        'Flag', 'Hidden',
+                        'ID', 'LastSeen', 'Ozone1',
+                        'PM2_5Value', 'ParentID',
+                        'Stats', 'Type', 'Voc',
+                        'humidity', 'isOwner',
+                        'pressure', 'temp_f',
+                        ], axis=1, inplace=True)
+        except:
+            count += 1
+            success = False
+        else:
+            success = True
+            print('Database successfully scraped.')
+    if success is True:
+        return df_pa
+    else:
+        print('Error connecting to PurpleAir server, check internet connection and retry in 2 minutes.')
 
 
 def sensor_metadata(df_pa, sensor):
