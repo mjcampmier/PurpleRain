@@ -259,6 +259,10 @@ def build_hdf(name_list, hdfname, tzstr, date_ind, lat, lon):
             else:
                 no_b = False
             sensors.append(name_list[i][0].replace('Primary_', '').split('_20')[0])
+            print(pa)
+            print(sa)
+            print(pb)
+            print(sb)
             pa = pd.read_csv(pa, skip_blank_lines=False)
             sa = pd.read_csv(sa, skip_blank_lines=False)
             pb = pd.read_csv(pb, skip_blank_lines=False)
