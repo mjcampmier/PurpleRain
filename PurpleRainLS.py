@@ -51,6 +51,7 @@ def download_database():
         else:
             success = True
             print('Database successfully scraped.')
+            count = 100
     if success is True:
         return df_pa
     else:
