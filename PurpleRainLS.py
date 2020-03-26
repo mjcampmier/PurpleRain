@@ -7,7 +7,6 @@ Last Edit: 22 March 2020
 import os
 import glob
 import warnings
-from json import JSONDecodeError
 import requests
 from pathlib import Path
 
