@@ -92,7 +92,7 @@ def download_request(id_, key, sd, ed, fname, down_dir):
                       int(SD_list[2]))
     ed = pd.Timestamp(int(ED_list[0]),
                       int(ED_list[1]),
-                      int(ED_list[2]) + 1)
+                      int(ED_list[2]))+pd.Timestamp(1, 'd')
     date_ind = pd.date_range(sd, ed, freq='1D')
     dir_path = build_dir(os.path.join(down_dir, fname))
     for i in range(0, len(date_ind)):
