@@ -239,7 +239,7 @@ def fill_hdf(h5file, sensor, df, lat, lon):
     return h5file
 
 
-def build_hdf(name_list, hdfname, tzstr, date_ind, lat, lon):
+def build_hdf(name_list, sensor_list, hdfname, tzstr, date_ind, lat, lon):
     h5file = file_hdf(hdfname, np.array(date_ind.to_julian_date()))
     sensors = []
     for i in range(0, len(name_list)):
@@ -258,7 +258,7 @@ def build_hdf(name_list, hdfname, tzstr, date_ind, lat, lon):
                 no_b = True
             else:
                 no_b = False
-            sensors.append(name_list[i][0].replace('Primary_', '').split('_20')[0])
+            sensors.append(sensor_list[i].replace(' ', '_'))
             pa = pd.read_csv(pa, skip_blank_lines=False)
             sa = pd.read_csv(sa, skip_blank_lines=False)
             pb = pd.read_csv(pb, skip_blank_lines=False)
@@ -383,6 +383,6 @@ def download_list(sensor_list_file, sd, ed, hdfname, tz):
                             tz='UTC')
     date_ind = pd.date_range(start_date, end_date, freq='2T')
     date_ind = date_ind.tz_convert(tz)
-    build_hdf(names, hdfname, tz, date_ind, LAT, LON)
+    build_hdf(names, sensor_list, hdfname, tz, date_ind, LAT, LON)
     hdf5_to_mat(hdfname + '.h5')
     print('Successfully downloaded all sensors.')
