@@ -27,7 +27,7 @@ def lim10(x):
 
 class PurpleAir:
     def __init__(self, name, time, pm25_cf_a, pm25_cf_b,
-                 temperature, relative_humidity, lat, lon):
+                 temperature, relative_humidity, pressure, lat, lon):
         self.name = name
         if type(time[:][0]) == np.float64:
             self.time = pd.to_datetime(time, origin='julian', unit='D').values
@@ -37,19 +37,21 @@ class PurpleAir:
         self.pm25_cf_B = pm25_cf_b
         self.temperature = temperature
         self.relative_humidity = relative_humidity
+        self.pressure = pressure
         self.lat = lat
         self.lon = lon
 
     def block_average(self, dt):
         df = pd.DataFrame([self.pm25_cf_A, self.pm25_cf_B,
-                           self.temperature, self.relative_humidity])
+                           self.temperature, self.relative_humidity, self.pressure])
         df = df.T
-        df.columns = ['pm25_cf_A', 'pm25_cf_B', 'temperature', 'relative_humidity']
+        df.columns = ['pm25_cf_A', 'pm25_cf_B', 'temperature', 'relative_humidity', 'pressure']
         df.index = self.time
         df_block = df.resample(dt).apply(np.nanmean)
         pa = PurpleAir(self.name, df_block.index.values, df_block.pm25_cf_A.values,
                        df_block.pm25_cf_B.values, df_block.temperature.values,
-                       df_block.relative_humidity.values, self.lat, self.lon)
+                       df_block.relative_humidity.values, df_block.pressure.values,
+                       self.lat, self.lon)
         return pa
 
     def timeseries_plot(self):
@@ -173,6 +175,7 @@ class PurpleAirNetwork:
             pm25_cf_b = f[sensors_directory[i] + 'B/PM_CF/PM25_CF'][:]
             temperature = f[sensors_directory[i] + 'Meteorology/Temperature'][:]
             relative_humidity = f[sensors_directory[i] + 'Meteorology/RH'][:]
+            pressure = f[sensors_directory[i] + 'Meteorology/Pressure'][:]
             latitude = f[sensors_directory[i] + 'Latitude']
             longitude = f[sensors_directory[i] + 'Longitude']
             n[sensors[i]] = PurpleAir(sensors[i],
@@ -181,6 +184,7 @@ class PurpleAirNetwork:
                                       pm25_cf_b,
                                       temperature,
                                       relative_humidity,
+                                      pressure,
                                       latitude,
                                       longitude)
         self.network = n
