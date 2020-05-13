@@ -1,7 +1,7 @@
 '''
 Author: Mark Campmier
 Github/Twitter: @mjcampmier
-Last Edit: 22 March 2020
+Last Edit: 12 May 2020
 '''
 
 # built-in
@@ -25,12 +25,50 @@ def lim10(x):
     return np.nanmax(np.ceil(x / 10) * 10)
 
 
+def purpleair_filter(df, threshold=5, LOD=5, upper_cut=np.inf, upper_cut_threshold=0.1, bad_return=np.nan):
+    if (upper_cut < LOD) or (upper_cut < threshold) or (LOD > threshold) or (upper_cut_threshold > 1.0):
+        return np.nan
+    elif (np.isnan(df.a)) and (np.isnan(df.b)):
+        return np.nan
+    else:
+        if (df.a > upper_cut) or (df.b > upper_cut):
+            per_res = (np.abs(df.a - df.b)) / df.a
+            if per_res <= upper_cut_threshold:
+                return np.nanmean([df.a, df.b])
+            else:
+                return bad_return
+        elif (df.a >= LOD) and (df.b >= LOD):
+            raw_res = np.abs(df.a - df.b)
+            if raw_res <= 10:
+                return np.nanmean([df.a, df.b])
+            else:
+                return bad_return
+        else:
+            return bad_return
+
+
+def process_bam(csvfile, tzstr):
+    BAM = pd.read_csv(csvfile, skiprows=[0, 1, 2, 3], index_col=0)
+    BAM = BAM.drop(BAM.columns[3:-1], axis=1)
+    BAM.index = pd.to_datetime(BAM.index).tz_localize(tzstr)
+    BAM[BAM['Flow(lpm)'] >= 16.6] = np.nan
+    BAM[BAM['ConcHR(ug/m3)'] < 2.4] = np.nan
+    BAM[BAM['ConcHR(ug/m3)'] > 2000] = np.nan
+    BAM[BAM['ConcRT(ug/m3)'] > 2000] = np.nan
+    BAM[BAM['Status'] != 0] = np.nan
+    BAM = BAM.drop(['Status', 'ConcRT(ug/m3)', 'Flow(lpm)'], axis=1)
+    BAM = BAM.dropna()
+    BAM.columns = ['BAM']
+    BAM = BAM.resample('60T').apply(np.nanmean)
+    return BAM
+
+
 class PurpleAir:
     def __init__(self, name, time, pm25_cf_a, pm25_cf_b,
                  temperature, relative_humidity, pressure, lat, lon):
         self.name = name
         if type(time[:][0]) == np.float64:
-            self.time = pd.to_datetime(time, origin='julian', unit='D').values
+            self.time = pd.to_datetime(time, origin='julian', unit='D').round('min').values
         else:
             self.time = time
         self.pm25_cf_A = pm25_cf_a
@@ -41,12 +79,14 @@ class PurpleAir:
         self.lat = lat
         self.lon = lon
 
-    def block_average(self, dt):
+    def block_average(self, dt, flags=None):
         df = pd.DataFrame([self.pm25_cf_A, self.pm25_cf_B,
                            self.temperature, self.relative_humidity, self.pressure])
         df = df.T
         df.columns = ['pm25_cf_A', 'pm25_cf_B', 'temperature', 'relative_humidity', 'pressure']
         df.index = self.time
+        if flags is not None:
+            df = df[flags == 1]
         df_block = df.resample(dt).apply(np.nanmean)
         pa = PurpleAir(self.name, df_block.index.values, df_block.pm25_cf_A.values,
                        df_block.pm25_cf_B.values, df_block.temperature.values,
@@ -93,12 +133,16 @@ class PurpleAir:
         df_diel.columns = ['Median', 'IQR']
         return df_diel
 
-    def abperformance(self, residuals=False):
-        error = self.pm25_cf_A - self.pm25_cf_B
+    def abperformance(self, threshold=5, LOD=5, residuals=False):
         mask = ((~np.isnan(self.pm25_cf_A)) & (~np.isnan(self.pm25_cf_B)))
-        pm25 = pd.DataFrame([self.pm25_cf_A, self.pm25_cf_B]).mean(axis=0).T.values
-        down = len(pm25[np.isnan(pm25)]) / len(pm25)
-        bad = len(pm25[(error < -5) | (error > 5)]) / len(pm25)
+        pm25 = pd.DataFrame([self.pm25_cf_A, self.pm25_cf_B], index=self.time).T
+        pm25.columns = ['a', 'b']
+        filtered = pm25.apply(lambda x: purpleair_filter(x,
+                                                         threshold=threshold,
+                                                         LOD=LOD,
+                                                         bad_return=-99999), axis=1).values
+        down = len(filtered[np.isnan(filtered)]) / len(filtered)
+        bad = len(filtered[(filtered == -99999)]) / len(filtered)
         good = 1 - (bad + down)
         if (len(self.pm25_cf_A[~mask]) < len(self.pm25_cf_A) - 2) and (
                 len(self.pm25_cf_B[~mask]) < len(self.pm25_cf_B) - 2):
@@ -153,10 +197,15 @@ class PurpleAir:
 
         return down, bad, good, r2, nrmse
 
-    def qf(self):
-        error = np.abs(self.pm25_cf_B - self.pm25_cf_A)
-        flag = np.zeros((len(error), 1))
-        flag[(error > 5)] = 1
+    def qf(self, threshold=5, LOD=5):
+        mask = ((~np.isnan(self.pm25_cf_A)) & (~np.isnan(self.pm25_cf_B)))
+        pm25 = pd.DataFrame([self.pm25_cf_A, self.pm25_cf_B]).T
+        pm25.index = self.time
+        pm25.columns = ['a', 'b']
+        filtered = pm25.apply(lambda x: purpleair_filter(x, threshold=threshold,
+                                                         LOD=LOD, bad_return=np.nan), axis=1).values
+        flag = np.zeros_like(filtered)
+        flag[~np.isnan(filtered)] = 1
         return flag
 
 
@@ -190,7 +239,7 @@ class PurpleAirNetwork:
         self.network = n
         return self
 
-    def abperformance(self, plot=False):
+    def abperformance(self, threshold=5, LOD=5, plot=False):
         keys = list(self.network.keys())
         good = np.zeros([len(keys), 1])
         bad = np.zeros([len(keys), 1])
@@ -199,7 +248,7 @@ class PurpleAirNetwork:
         nrmse = np.zeros([len(keys), 1])
         i = 0
         for k in keys:
-            d, b, g, r, nr = self.network[k].abperformance()
+            d, b, g, r, nr = self.network[k].abperformance(threshold=threshold, LOD=LOD)
             good[i] = g
             bad[i] = b
             down[i] = d
@@ -210,7 +259,7 @@ class PurpleAirNetwork:
         good = good.flatten()
         bad = bad.flatten()
         down = down.flatten()
-        if plot == True:
+        if plot:
             plt.figure(figsize=(10, 5))
             plt.bar(ind, good, color='green')
             plt.bar(ind, bad, bottom=good, color=[207 / 256, 181 / 256, 59 / 256])
@@ -222,12 +271,15 @@ class PurpleAirNetwork:
                        framealpha=1)
         return good, bad, down, r2, nrmse
 
-    def block_average(self, dt):
+    def block_average(self, dt, flags=None):
         pnet_ba = PurpleAirNetwork()
         n = dict()
         keys = list(self.network.keys())
         for k in keys:
-            n[k] = self.network[k].block_average(dt)
+            if flags is not None:
+                n[k] = self.network[k].block_average(dt, flags=flags[k].values)
+            else:
+                n[k] = self.network[k].block_average(dt)
         pnet_ba.network = n
         return pnet_ba
 
@@ -251,13 +303,13 @@ class PurpleAirNetwork:
             plt.grid()
         return df_med, df_iqr
 
-    def flags(self):
+    def flags(self, threshold=5, LOD=5):
         keys = list(self.network.keys())
         time = self.network[keys[0]].time
         flags = pd.DataFrame(np.zeros([len(time), len(keys)]), columns=keys, index=time)
         i = 0
         for k in keys:
-            f = self.network[k].qf()
+            f = self.network[k].qf(threshold=threshold, LOD=LOD)
             flags.iloc[:, i] = f
             i += 1
         return flags
@@ -278,3 +330,16 @@ class PurpleAirNetwork:
         df_map.index = keys
         df_map.columns = ['Longitude', 'Latitude', 'PM2.5']
         return df_map
+
+    def build_df(self, tzstr):
+        keys = list(self.network.keys())
+        df = pd.DataFrame(index=self.network[keys[0]].time)
+        for k in set(keys):
+            df_t = pd.DataFrame([self.network[k].pm25_cf_A.T,
+                                 self.network[k].pm25_cf_B.T])
+            df_t = df_t.T
+            df_t.columns = [k + '_A', k + '_B']
+            df_t.index = self.network[k].time
+            df = pd.concat([df, df_t], axis=1)
+        df.index = df.index.tz_localize(tzstr)
+        return df
