@@ -50,7 +50,7 @@ def purpleair_filter(df, threshold=5, LOD=5, upper_cut=np.inf, upper_cut_thresho
 def process_bam(csvfile, tzstr):
     BAM = pd.read_csv(csvfile, skiprows=[0, 1, 2, 3], index_col=0)
     BAM = BAM.drop(BAM.columns[3:-1], axis=1)
-    BAM.index = pd.to_datetime(BAM.index).tz_localize(tzstr)
+    BAM.index = pd.to_datetime(BAM.index).tz_localize(tzstr) - pd.Timedelta('1H')
     BAM[BAM['Flow(lpm)'] <= 16.58] = np.nan
     BAM[BAM['ConcHR(ug/m3)'] < 2.4] = np.nan
     BAM[BAM['ConcHR(ug/m3)'] > 2000] = np.nan
