@@ -51,7 +51,7 @@ def process_bam(csvfile, tzstr):
     BAM = pd.read_csv(csvfile, skiprows=[0, 1, 2, 3], index_col=0)
     BAM = BAM.drop(BAM.columns[3:-1], axis=1)
     BAM.index = pd.to_datetime(BAM.index).tz_localize(tzstr)
-    BAM[BAM['Flow(lpm)'] >= 16.58] = np.nan
+    BAM[BAM['Flow(lpm)'] <= 16.58] = np.nan
     BAM[BAM['ConcHR(ug/m3)'] < 2.4] = np.nan
     BAM[BAM['ConcHR(ug/m3)'] > 2000] = np.nan
     BAM[BAM['ConcRT(ug/m3)'] > 2000] = np.nan
@@ -88,6 +88,7 @@ class PurpleAir:
         if flags is not None:
             df = df[flags == 0]
         df_block = df.resample(dt).apply(np.nanmean)
+        df_block = df_block.round(2)
         pa = PurpleAir(self.name, df_block.index.values, df_block.pm25_cf_A.values,
                        df_block.pm25_cf_B.values, df_block.temperature.values,
                        df_block.relative_humidity.values, df_block.pressure.values,
