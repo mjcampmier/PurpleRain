@@ -1,7 +1,7 @@
 '''
 Author: Mark Campmier
 Github/Twitter: @mjcampmier
-Last Edit: 12 May 2020
+Last Edit: 15 May 2020
 '''
 
 # built-in
@@ -51,7 +51,7 @@ def process_bam(csvfile, tzstr):
     BAM = pd.read_csv(csvfile, skiprows=[0, 1, 2, 3], index_col=0)
     BAM = BAM.drop(BAM.columns[3:-1], axis=1)
     BAM.index = pd.to_datetime(BAM.index).tz_localize(tzstr)
-    BAM[BAM['Flow(lpm)'] >= 16.6] = np.nan
+    BAM[BAM['Flow(lpm)'] >= 16.58] = np.nan
     BAM[BAM['ConcHR(ug/m3)'] < 2.4] = np.nan
     BAM[BAM['ConcHR(ug/m3)'] > 2000] = np.nan
     BAM[BAM['ConcRT(ug/m3)'] > 2000] = np.nan
@@ -86,7 +86,7 @@ class PurpleAir:
         df.columns = ['pm25_cf_A', 'pm25_cf_B', 'temperature', 'relative_humidity', 'pressure']
         df.index = self.time
         if flags is not None:
-            df = df[flags == 1]
+            df = df[flags == 0]
         df_block = df.resample(dt).apply(np.nanmean)
         pa = PurpleAir(self.name, df_block.index.values, df_block.pm25_cf_A.values,
                        df_block.pm25_cf_B.values, df_block.temperature.values,
@@ -135,7 +135,8 @@ class PurpleAir:
 
     def abperformance(self, threshold=5, LOD=5, residuals=False):
         mask = ((~np.isnan(self.pm25_cf_A)) & (~np.isnan(self.pm25_cf_B)))
-        pm25 = pd.DataFrame([self.pm25_cf_A, self.pm25_cf_B], index=self.time).T
+        pm25 = pd.DataFrame([self.pm25_cf_A, self.pm25_cf_B]).T
+        pm25.index = self.time
         pm25.columns = ['a', 'b']
         filtered = pm25.apply(lambda x: purpleair_filter(x,
                                                          threshold=threshold,
@@ -158,9 +159,9 @@ class PurpleAir:
 
             fig, ax = plt.subplots(figsize=(20, 10))
             ax1 = plt.subplot(131)
-            n1, _, _ = ax1.hist(error, density=True, color='red')
+            # n1, _, _ = ax1.hist(error, density=True, color='red')
             ax1.set_xlim([-10, 10])
-            ax1.set_ylim([0, lim10(np.array([n1])) / 20])
+            # ax1.set_ylim([0, lim10(np.array([n1])) / 20])
             ax1.set_xlabel('Residuals ($\mu$g/m$^{3}$)')
             ax1.set_ylabel('Probability')
             ax1.set_title('Raw Residuals')
@@ -205,7 +206,7 @@ class PurpleAir:
         filtered = pm25.apply(lambda x: purpleair_filter(x, threshold=threshold,
                                                          LOD=LOD, bad_return=np.nan), axis=1).values
         flag = np.zeros_like(filtered)
-        flag[~np.isnan(filtered)] = 1
+        flag[np.isnan(filtered)] = 1
         return flag
 
 
