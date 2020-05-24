@@ -135,33 +135,36 @@ def download_sensor(sensor, sd, ed, down_dir, db=None):
     else:
         df_pa = db
     ID, KEYS, LAT, LON = sensor_metadata(df_pa, sensor)
-    sensor_A = sensor.replace(' ', '_').replace('/', '_')
-    sensor_B = sensor_A + '_B'
-    sd = sd.replace('-', '_')
-    ed = ed.replace('-', '_')
-    fname = ['Primary_' + sensor_A + '_' + sd + '_' + ed,
-             'Secondary_' + sensor_A + '_' + sd + '_' + ed,
-             'Primary_' + sensor_B + '_' + sd + '_' + ed,
-             'Secondary_' + sensor_B + '_' + sd + '_' + ed]
-    fields_primary_A = ["created_at", "entry_id", "PM1.0_CF1_ug/m3",
-                        "PM2.5_CF1_ug/m3", "PM10.0_CF1_ug/m3", "UptimeMinutes",
-                        "ADC", "Temperature_F", "Humidity_%", "PM2.5_ATM_ug/m3"]
-    fields_secondary_A = ["created_at", "entry_id",
-                          ">=0.3um/dl", ">=0.5um/dl", ">1.0um/dl", ">=2.5um/dl",
-                          ">=5.0um/dl", ">=10.0um/dl", "PM1.0_ATM_ug/m3", "PM10_ATM_ug/m3"]
-    fields_primary_B = ["created_at", "entry_id", "PM1.0_CF1_ug/m3",
-                        "PM2.5_CF1_ug/m3", "PM10.0_CF1_ug/m3", "UptimeMinutes",
-                        "RSSI_dbm", "Pressure_hpa", "IAQ", "PM2.5_ATM_ug/m3"]
-    fields_secondary_B = ["created_at", "entry_id",
-                          ">=0.3um/dl", ">=0.5um/dl", ">1.0um/dl", ">=2.5um/dl",
-                          ">=5.0um/dl", ">=10.0um/dl", "PM1.0_ATM_ug/m3", "PM10_ATM_ug/m3"]
-    fields = [fields_primary_A, fields_secondary_A,
-              fields_primary_B, fields_secondary_B]
-    for i in range(0, len(ID)):
-        full_name = download_request(ID[i], KEYS[i], sd, ed, fname[i], down_dir)
-        assign_field_names(full_name, fields[i])
-    print('Successfully downloaded ' + str(sensor))
-    return LAT, LON
+    if ~np.isnan(LON):
+        sensor_A = sensor.replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_')
+        sensor_B = sensor_A + '_B'
+        sd = sd.replace('-', '_')
+        ed = ed.replace('-', '_')
+        fname = ['Primary_' + sensor_A + '_' + sd + '_' + ed,
+                 'Secondary_' + sensor_A + '_' + sd + '_' + ed,
+                 'Primary_' + sensor_B + '_' + sd + '_' + ed,
+                 'Secondary_' + sensor_B + '_' + sd + '_' + ed]
+        fields_primary_A = ["created_at", "entry_id", "PM1.0_CF1_ug/m3",
+                            "PM2.5_CF1_ug/m3", "PM10.0_CF1_ug/m3", "UptimeMinutes",
+                            "ADC", "Temperature_F", "Humidity_%", "PM2.5_ATM_ug/m3"]
+        fields_secondary_A = ["created_at", "entry_id",
+                              ">=0.3um/dl", ">=0.5um/dl", ">1.0um/dl", ">=2.5um/dl",
+                              ">=5.0um/dl", ">=10.0um/dl", "PM1.0_ATM_ug/m3", "PM10_ATM_ug/m3"]
+        fields_primary_B = ["created_at", "entry_id", "PM1.0_CF1_ug/m3",
+                            "PM2.5_CF1_ug/m3", "PM10.0_CF1_ug/m3", "UptimeMinutes",
+                            "RSSI_dbm", "Pressure_hpa", "IAQ", "PM2.5_ATM_ug/m3"]
+        fields_secondary_B = ["created_at", "entry_id",
+                              ">=0.3um/dl", ">=0.5um/dl", ">1.0um/dl", ">=2.5um/dl",
+                              ">=5.0um/dl", ">=10.0um/dl", "PM1.0_ATM_ug/m3", "PM10_ATM_ug/m3"]
+        fields = [fields_primary_A, fields_secondary_A,
+                  fields_primary_B, fields_secondary_B]
+        for i in range(0, len(ID)):
+            full_name = download_request(ID[i], KEYS[i], sd, ed, fname[i], down_dir)
+            assign_field_names(full_name, fields[i])
+        print('Successfully downloaded ' + str(sensor))
+        return LAT, LON
+    else:
+        return np.nan, np.nan
 
 
 def time_master(dfpa, dfsa, dfpb, dfsb, tzstr, date_ind):
@@ -259,7 +262,7 @@ def build_hdf(name_list, sensor_list, hdfname, tzstr, date_ind, lat, lon):
                 no_b = True
             else:
                 no_b = False
-            sensors.append(sensor_list[i].replace(' ', '_'))
+            sensors.append(sensor_list[i].replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_'))
             pa = pd.read_csv(pa, skip_blank_lines=False)
             sa = pd.read_csv(sa, skip_blank_lines=False)
             pb = pd.read_csv(pb, skip_blank_lines=False)
@@ -346,7 +349,7 @@ def sensors_from_csv(csvfile):
 def downloaded_file_list(directory, sensor_list):
     name_list = []
     for i in range(0, len(sensor_list)):
-        search_name = os.path.join(directory, '*_' + sensor_list[i].replace(' ', '_') + '_*.csv')
+        search_name = os.path.join(directory, '*_' + sensor_list[i].replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_') + '_*.csv')
         name_list_temp = glob.glob(search_name)
         name_list.append(sorted(name_list_temp))
     names = name_list
@@ -369,6 +372,7 @@ def download_list(sensor_list_file, sd, ed, hdfname, tz):
         lat, lon = download_sensor(sensor_list[i], sd, ed, hdfname, db=df_db)
         LAT.append(lat)
         LON.append(lon)
+    sensor_list = sensor_list[~np.isnan(LAT)]
     names = downloaded_file_list(dir_name, sensor_list.tolist())
     sd = sd.split('-')
     ed = ed.split('-')
