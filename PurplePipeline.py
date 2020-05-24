@@ -67,10 +67,13 @@ class PurpleAir:
     def __init__(self, name, time, pm25_cf_a, pm25_cf_b,
                  temperature, relative_humidity, pressure, lat, lon):
         self.name = name
-        if type(time[:][0]) == np.float64:
-            self.time = pd.to_datetime(time, origin='julian', unit='D').round('min').values
-        else:
-            self.time = time
+        try:
+            if type(time[:][0]) == np.float64:
+                self.time = pd.to_datetime(time, origin='julian', unit='D').round('min').values
+            else:
+                self.time = time
+        except IndexError:
+            self.time = np.zeros_like(pm25_cf_a)*np.nan
         self.pm25_cf_A = pm25_cf_a
         self.pm25_cf_B = pm25_cf_b
         self.temperature = temperature
