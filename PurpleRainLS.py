@@ -312,7 +312,7 @@ def build_hdf(name_list, sensor_list, hdfname, tzstr, date_ind, lat, lon):
                 pb.iloc[:, 1:] = np.nan
                 sb.iloc[:, 1:] = np.nan
             df_summary = time_master(pa, sa, pb, sb, tzstr, date_ind)
-            sensor = str(os.path.basename(sensors[i]).split('.')[0])
+            sensor = str(os.path.basename(sensors[i]).split('.')[0][0:30])
             h5file = fill_hdf(h5file, sensor, df_summary, lat[i], lon[i])
             print("Filled HDF for " + sensor)
     h5file.close()
