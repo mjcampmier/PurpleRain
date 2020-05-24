@@ -28,7 +28,7 @@ def build_dir(dir_path):
     return dir_path
 
 
-def download_database():
+def download_database(drop=True):
     success = False
     count = 0
     while count < 10:
@@ -36,14 +36,15 @@ def download_database():
             r = requests.get('https://www.purpleair.com/json')
             all_pa = dict(r.json())
             df_pa = pd.DataFrame(all_pa['results'])
-            df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
-                        'Flag', 'Hidden',
-                        'ID', 'LastSeen', 'Ozone1',
-                        'PM2_5Value', 'ParentID',
-                        'Stats', 'Type', 'Voc',
-                        'humidity', 'isOwner',
-                        'pressure', 'temp_f',
-                        ], axis=1, inplace=True)
+            if drop is True:
+                df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
+                            'Flag', 'Hidden',
+                            'ID', 'LastSeen', 'Ozone1',
+                            'PM2_5Value', 'ParentID',
+                            'Stats', 'Type', 'Voc',
+                            'humidity', 'isOwner',
+                            'pressure', 'temp_f',
+                            ], axis=1, inplace=True)
         except:
             count += 1
             success = False
@@ -92,7 +93,7 @@ def download_request(id_, key, sd, ed, fname, down_dir):
                       int(SD_list[2]))
     ed = pd.Timestamp(int(ED_list[0]),
                       int(ED_list[1]),
-                      int(ED_list[2]))+pd.Timedelta(1, 'd')
+                      int(ED_list[2])) + pd.Timedelta(1, 'd')
     date_ind = pd.date_range(sd, ed, freq='1D')
     dir_path = build_dir(os.path.join(down_dir, fname))
     for i in range(0, len(date_ind)):
