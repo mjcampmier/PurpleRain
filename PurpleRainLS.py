@@ -135,7 +135,7 @@ def download_sensor(sensor, sd, ed, down_dir, db=None):
     else:
         df_pa = db
     ID, KEYS, LAT, LON = sensor_metadata(df_pa, sensor)
-    sensor_A = sensor.replace(' ', '_')
+    sensor_A = sensor.replace(' ', '_').replace('/', '_')
     sensor_B = sensor_A + '_B'
     sd = sd.replace('-', '_')
     ed = ed.replace('-', '_')
