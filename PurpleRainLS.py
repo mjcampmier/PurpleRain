@@ -372,7 +372,7 @@ def download_list(sensor_list_file, sd, ed, hdfname, tz):
         lat, lon = download_sensor(sensor_list[i], sd, ed, hdfname, db=df_db)
         LAT.append(lat)
         LON.append(lon)
-    sensor_list = sensor_list[~np.isnan(LAT)]
+    sensor_list = sensor_list[~np.isnan(LAT)].values
     names = downloaded_file_list(dir_name, sensor_list.tolist())
     sd = sd.split('-')
     ed = ed.split('-')
