@@ -21,8 +21,41 @@ import h5py as h5
 warnings.filterwarnings("ignore")
 
 
-def lim10(x):
-    return np.nanmax(np.ceil(x / 10) * 10)
+def axis_lim(y, zero=True):
+    mx = np.nanmax(y)
+    if mx <= 10:
+        ymax = np.ceil(mx / 2) * 2
+    elif (mx > 10) and (mx <= 100):
+        ymax = np.ceil(mx / 10) * 10
+    elif (mx > 100) and (mx <= 300):
+        ymax = np.ceil(mx / 20) * 20
+    elif (mx > 300) and (mx <= 1000):
+        ymax = np.ceil(mx / 50) * 50
+    elif (mx > 1000) and (mx <= 2000):
+        ymax = np.ceil(mx / 100) * 100
+    else:
+        ymax = np.ceil(mx / 1000) * 1000
+    if zero == True:
+        return [0, ymax]
+    else:
+        mn = np.abs(np.nanmin(y))
+        if np.nanmin(y) < 0:
+            sign = -1
+        else:
+            sign = 1
+        if mn <= 10:
+            ymin = np.ceil(mn / 2) * 2
+        elif (mn > 10) and (mx <= 100):
+            ymin = np.ceil(mn / 10) * 10
+        elif (mn > 100) and (mn <= 300):
+            ymin = np.ceil(mn / 20) * 20
+        elif (mn > 300) and (mn <= 1000):
+            ymin = np.ceil(mn / 50) * 50
+        elif (mn > 1000) and (mn <= 2000):
+            ymin = np.ceil(mn / 100) * 100
+        else:
+            ymin = np.ceil(mn / 1000) * 1000
+        return [ymin * sign, ymax]
 
 
 def purpleair_filter(df, threshold=5, LOD=5, upper_cut=np.inf, upper_cut_threshold=0.1, bad_return=np.nan):
@@ -73,7 +106,7 @@ class PurpleAir:
             else:
                 self.time = time
         except IndexError:
-            self.time = np.zeros_like(pm25_cf_a)*np.nan
+            self.time = np.zeros_like(pm25_cf_a) * np.nan
         self.pm25_cf_A = pm25_cf_a
         self.pm25_cf_B = pm25_cf_b
         self.temperature = temperature
@@ -102,7 +135,7 @@ class PurpleAir:
         register_matplotlib_converters()
         plt.step(self.time, self.pm25_cf_A, color=[0.75, 0, 0.75], linewidth=2)
         plt.step(self.time, self.pm25_cf_B, color=[0.35, 0, 0.35], linewidth=2)
-        plt.ylim([0, lim10(self.pm25_cf_A)])
+        plt.ylim(axis_lim(self.pm25_cf_A, zero=True))
         plt.xlim([self.time[0], self.time[-1]])
         plt.xticks(rotation=90)
         plt.xlabel('Local Time')
@@ -127,7 +160,7 @@ class PurpleAir:
             plt.fill_between(x, y1, y2, where=y2 >= y1, facecolor=[0.5, 0, 0.5], alpha=0.5)
             plt.xticks(x)
             plt.xlim([0, 23])
-            plt.ylim([0, lim10(y2)])
+            plt.ylim(axis_lim(y2, zero=True))
             plt.xlabel('Hour of Day')
             plt.ylabel('PM$_{2.5}$ ($\mu$g/m$^{3}$)')
             plt.title(self.name + ' Diurnal Trend')
@@ -180,8 +213,8 @@ class PurpleAir:
                    int(np.ceil(np.nanmax(col)))]
             cax = ax2.scatter(self.pm25_cf_A, self.pm25_cf_B, c=col, s=200)
             ax2.plot(self.pm25_cf_A, self.pm25_cf_A * m + b, linewidth=2, color='k')
-            ax2.set_xlim([0, lim10(np.concatenate([self.pm25_cf_A, self.pm25_cf_B]))])
-            ax2.set_ylim([0, lim10(np.concatenate([self.pm25_cf_A, self.pm25_cf_B]))])
+            ax2.set_xlim(axis_lim(np.concatenate([self.pm25_cf_A, self.pm25_cf_B]), zero=True))
+            ax2.set_ylim(axis_lim(np.concatenate([self.pm25_cf_A, self.pm25_cf_B]), zero=True))
             ax2.set_xlabel('A Channel PM$_{2.5}$ ($\mu$g/m$^{3}$)')
             ax2.set_ylabel('B Channel PM$_{2.5}$ ($\mu$g/m$^{3})$')
             ax2.set_title(self.name)
@@ -194,7 +227,7 @@ class PurpleAir:
             ax3 = plt.subplot(133)
             n2, _, _ = ax3.hist(residuals, density=True, color='blue')
             ax3.set_xlim([-10, 10])
-            ax3.set_ylim([0, lim10(np.array([n2])) / 20])
+            ax3.set_ylim(axis_lim(np.array([n2])) / 20, zero=True)
             ax3.set_xlabel('Residuals ($\mu$g/m$^{3}$)')
             ax3.set_ylabel('Probability')
             ax3.set_title('Model Resiudals')
@@ -301,7 +334,7 @@ class PurpleAirNetwork:
             plt.plot(x, df_med)
             plt.xticks(x, x)
             plt.xlim([0, 23])
-            plt.ylim([0, lim10(df_med.values)])
+            plt.ylim(axis_lim(df_med.values, zero=True))
             plt.xlabel('Hour of Day')
             plt.ylabel('PM$_{2.5}$ ($\mu$g/m$^{3}$)')
             plt.title('Network Diurnal Trends')
