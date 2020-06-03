@@ -1,9 +1,3 @@
-'''
-Author: Mark Campmier
-Github/Twitter: @mjcampmier
-Last Edit: 15 May 2020
-'''
-
 # built-in
 import warnings
 
@@ -23,11 +17,14 @@ warnings.filterwarnings("ignore")
 
 
 def mean_cc(x):
-    n = len(x[~np.isnan(x)]) / len(x)
-    if n < 0.8:
+    if len(x) == 0:
         return np.nan
     else:
-        return np.nanmean(x)
+        n = len(x[~np.isnan(x)]) / len(x)
+        if n < 0.8:
+            return np.nan
+        else:
+            return np.nanmean(x)
 
 
 def axis_lim(y, zero=True):
@@ -106,20 +103,25 @@ def process_bam(csvfile, tzstr):
 
 
 def file_hdf(sname, time_idx):
-    h5file = h5.File(sname + '.h5', 'w')
+    h5file = h5.File(sname, 'w')
     Time = h5file.create_group('Time')
-    Time.create_dataset('Time', data=time_idx)
+    Time.create_dataset('Time',
+                        data=pd.to_datetime(time_idx).to_julian_date())
     return h5file
 
 
-def fill_hdf(h5file, sensor):
-    location = h5file.create_group('PurpleAir/' + sensor)
+def fill_hdf(h5file, sensor, date_ind):
+    location = h5file.create_group('PurpleAir/' + sensor.name)
     location.create_dataset('Latitude', data=sensor.lat)
     location.create_dataset('Longitude', data=sensor.lon)
-    location.create_dataset('PM25', data=sensor.pm25_cf, compression="gzip")
-    location.create_dataset('Relative_Humidity', data=sensor.relative_humidity, compression="gzip")
-    location.create_dataset('Temperature', data=sensor.temperature, compression="gzip")
-    location.create_dataset('Pressure', data=sensor.pressure, compression="gzip")
+    df = pd.DataFrame([sensor.pm25_cf, sensor.relative_humidity,
+                       sensor.temperature, sensor.pressure]).T
+    df.index=pd.to_datetime(date_ind)
+    df.columns=['pm25','rh','temp','pressure']
+    location.create_dataset('PM25', data=df.pm25.values, compression="gzip")
+    location.create_dataset('Relative_Humidity', data=df.rh.values, compression="gzip")
+    location.create_dataset('Temperature', data=df.temp.values, compression="gzip")
+    location.create_dataset('Pressure', data=df.pressure.values, compression="gzip")
     h5file.flush()
     return h5file
 
@@ -128,7 +130,7 @@ def build_hdf(sensor_network, hdf_name, date_ind):
     h5file = file_hdf(hdf_name, date_ind)
     sensor_list = list(sensor_network.network.keys())
     for sensor in sensor_list:
-        fill_hdf(h5file, sensor_network.network[sensor])
+        fill_hdf(h5file, sensor_network.network[sensor], date_ind)
     h5file.close()
 
 
@@ -158,7 +160,7 @@ class PurpleAir:
         df.columns = ['pm25_cf', 'pm25_cf_B', 'temperature', 'relative_humidity', 'pressure']
         df.index = self.time
         if flags is not None:
-            df = df[flags == 0]
+            df[flags==1] = np.nan
         df_block = df.resample(dt).apply(mean_cc)
         df_block = df_block.round(2)
         pa = PurpleAir(self.name, df_block.index.values, df_block.pm25_cf.values,
@@ -180,7 +182,7 @@ class PurpleAir:
         plt.legend([self.name + ' A', self.name + ' B'], framealpha=1)
 
     def bland_altman(self):
-        x = np.array([self.pm25_cf_a, self.pm25_cf_b])
+        x = np.array([self.pm25_cf, self.pm25_cf_B])
         y = x[0, :] - x[1, :]
         mean_diff = np.nanmean(y)
         std_diff = np.nanstd(y)
@@ -196,6 +198,8 @@ class PurpleAir:
         plt.grid()
         plt.ylim(y_lim)
         plt.xlim(x_lim)
+        plt.xlabel('Interchannel Mean ($\mu$g/m$^{3}$)')
+        plt.ylabel('Difference [A-B] ($\mu$g/m$^{3}$)')
         plt.legend(['Interchannel Sample',
                     'Zero Line',
                     'Mean Difference: ' + str(np.round(mean_diff, 2)),
@@ -309,7 +313,7 @@ class PurpleAir:
     def calibrate(self, source, syy=3):
         models = dict()
         dict_levels = ['PM25', 'PM25-RH', 'PM25-RH-Temp']
-        pm25 = np.nanmean(np.array([self.pm25_cf_a, self.pm25_cf_b]), 0)
+        pm25 = np.nanmean(np.array([self.pm25_cf, self.pm25_cf_B]), 0)
         df = pd.DataFrame([pm25, self.relative_humidty, self.temperature],
                           index=pd.to_datetime(self.time), columns=[self.name, 'RH', 'Temperature'])
         df = pd.concat([df, source], axis=1)
@@ -397,10 +401,10 @@ class PurpleAirNetwork:
             for i in range(0, len(sensors)):
                 latitude = f[sensors_directory[i] + 'Latitude']
                 longitude = f[sensors_directory[i] + 'Longitude']
-                pm25 = f[sensors_directory[i] + 'PM25']
-                relative_humidity = f[sensors_directory[i] + 'Relative_Humidity']
-                temperature = f[sensors_directory[i] + 'Temperature']
-                pressure = f[sensors_directory[i] + 'Pressure']
+                pm25 = f[sensors_directory[i] + 'PM25'][:]
+                relative_humidity = f[sensors_directory[i] + 'Relative_Humidity'][:]
+                temperature = f[sensors_directory[i] + 'Temperature'][:]
+                pressure = f[sensors_directory[i] + 'Pressure'][:]
                 n[sensors[i]] = PurpleAir(sensors[i],
                                           time,
                                           pm25,
@@ -498,9 +502,9 @@ class PurpleAirNetwork:
         for k in keys:
             sensor = pa_net_block_qa.network[k]
             pm25 = np.nanmean(np.array([sensor.pm25_cf,
-                                        sensor.pm25_cf_b]), 0)
+                                        sensor.pm25_cf_B]), 0)
             sensor.pm25_cf = pm25
-            sensor.pm25_cf_b = np.zeros_like(pm25)*np.nan
+            sensor.pm25_cf_B = np.zeros_like(pm25)*np.nan
         if save_file and save_name:
             build_hdf(pa_net_block_qa, save_name, time_ind)
         return pa_net_block_qa
@@ -522,7 +526,7 @@ class PurpleAirNetwork:
         df_map.columns = ['Longitude', 'Latitude', 'PM2.5']
         return df_map
 
-    def build_df(self, tzstr):
+    def build_df(self, tzstr, drop_b=False):
         keys = list(self.network.keys())
         df = pd.DataFrame(index=self.network[keys[0]].time)
         for k in set(keys):
@@ -533,6 +537,8 @@ class PurpleAirNetwork:
             df_t = df_t.T
             df_t.columns = [k, k + '_B', k+'_RH', k+'_Temperature']
             df_t.index = self.network[k].time
+            if drop_b:
+                df_t = df_t.drop([df_t.columns[1]],axis=1)
             df = pd.concat([df, df_t], axis=1)
         df.index = df.index.tz_localize(tzstr)
         return df
