@@ -15,5 +15,5 @@ In addition to the built-in libraries, and the data science libraries commonly d
 #### PurpleAir - manufacuturer of the PurpleAir sensor: https://www2.purpleair.com/
 #### Panoply - NASA app for viewing HDF/H5 files: https://www.giss.nasa.gov/tools/panoply/download/
 #### Iowa State Mesonet - Excellent source of weather data: http://www.mesonet.agron.iastate.edu/request/download.phtml
-#### Wikipedia Article on Timezones - contains all Timezone codes: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-#### Apte Group UT Austin - the research group I am apart of: http://apte.caee.utexas.edu/people/
+#### Timezones in Python - Read to find out more about timezone handling in Python: http://pytz.sourceforge.net/#helpers
+#### Apte Group UC Berkeley - The research group I am apart of: https://apte.berkeley.edu/
