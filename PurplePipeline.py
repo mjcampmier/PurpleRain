@@ -64,7 +64,7 @@ def axis_lim(y, zero=True):
         return [ymin * sign, ymax]
 
 
-def purpleair_filter(df, threshold=5, LOD=5, upper_cut=np.inf, upper_cut_threshold=0.1, bad_return=np.nan):
+def purpleair_filter(df, threshold=5, LOD=5, upper_cut=100, upper_cut_threshold=0.1, bad_return=np.nan):
     if (upper_cut < LOD) or (upper_cut < threshold) or (LOD > threshold) or (upper_cut_threshold > 1.0):
         return np.nan
     elif (np.isnan(df.a)) and (np.isnan(df.b)):
