@@ -1,0 +1,11 @@
+pandas
+numpy
+datetime
+plotly
+h5py
+pytz
+scipy
+requests
+matplotlib
+sklearn
+gunicorn
