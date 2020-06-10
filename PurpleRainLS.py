@@ -59,29 +59,56 @@ def download_database(drop=True):
 
 
 def sensor_metadata(df_pa, sensor):
-    sensor_A = sensor
-    sensor_B = sensor + ' B'
-    try:
-        primary_id_A = str(df_pa.THINGSPEAK_PRIMARY_ID[df_pa.Label == sensor_A].item())
-        primary_key_A = df_pa.THINGSPEAK_PRIMARY_ID_READ_KEY[df_pa.Label == sensor_A].item()
-        secondary_id_A = str(df_pa.THINGSPEAK_SECONDARY_ID[df_pa.Label == sensor_A].item())
-        secondary_key_A = df_pa.THINGSPEAK_SECONDARY_ID_READ_KEY[df_pa.Label == sensor_A].item()
+    if type(sensor) is str:
+        sensor_A = sensor
+        sensor_B = sensor + ' B'
+        try:
+            primary_id_A = str(df_pa.THINGSPEAK_PRIMARY_ID[df_pa.Label == sensor_A].item())
+            primary_key_A = df_pa.THINGSPEAK_PRIMARY_ID_READ_KEY[df_pa.Label == sensor_A].item()
+            secondary_id_A = str(df_pa.THINGSPEAK_SECONDARY_ID[df_pa.Label == sensor_A].item())
+            secondary_key_A = df_pa.THINGSPEAK_SECONDARY_ID_READ_KEY[df_pa.Label == sensor_A].item()
 
-        primary_id_B = str(df_pa.THINGSPEAK_PRIMARY_ID[df_pa.Label == sensor_B].item())
-        primary_key_B = df_pa.THINGSPEAK_PRIMARY_ID_READ_KEY[df_pa.Label == sensor_B].item()
-        secondary_id_B = str(df_pa.THINGSPEAK_SECONDARY_ID[df_pa.Label == sensor_B].item())
-        secondary_key_B = df_pa.THINGSPEAK_SECONDARY_ID_READ_KEY[df_pa.Label == sensor_B].item()
+            primary_id_B = str(df_pa.THINGSPEAK_PRIMARY_ID[df_pa.Label == sensor_B].item())
+            primary_key_B = df_pa.THINGSPEAK_PRIMARY_ID_READ_KEY[df_pa.Label == sensor_B].item()
+            secondary_id_B = str(df_pa.THINGSPEAK_SECONDARY_ID[df_pa.Label == sensor_B].item())
+            secondary_key_B = df_pa.THINGSPEAK_SECONDARY_ID_READ_KEY[df_pa.Label == sensor_B].item()
 
-        ID = [primary_id_A, secondary_id_A, primary_id_B, secondary_id_B]
-        KEYS = [primary_key_A, secondary_key_A, primary_key_B, secondary_key_B]
-        LAT = float(df_pa.Lat[df_pa.Label == sensor_A].item())
-        LON = float(df_pa.Lon[df_pa.Label == sensor_A].item())
-    except ValueError:
-        print('Name not found. Please check your PurpleAir registration for: ', sensor)
-        ID = [np.nan, np.nan, np.nan, np.nan]
-        KEYS = [np.nan, np.nan, np.nan, np.nan]
-        LAT = np.nan
-        LON = np.nan
+            ID = [primary_id_A, secondary_id_A, primary_id_B, secondary_id_B]
+            KEYS = [primary_key_A, secondary_key_A, primary_key_B, secondary_key_B]
+            LAT = float(df_pa.Lat[df_pa.Label == sensor_A].item())
+            LON = float(df_pa.Lon[df_pa.Label == sensor_A].item())
+        except ValueError:
+            print('Name not found. Please check your PurpleAir registration for: ', sensor)
+            ID = [np.nan, np.nan, np.nan, np.nan]
+            KEYS = [np.nan, np.nan, np.nan, np.nan]
+            LAT = np.nan
+            LON = np.nan
+    elif (type(sensor) is int) or (type(sensor) is np.int64):
+        PID = df_pa.THINGSPEAK_PRIMARY_ID.astype(np.int64)
+        sensor_idx = sorted(list(PID[((PID - sensor) <= 4) & ((PID - sensor) >= -4)].index))
+        sensor_A = sensor_idx[0]
+        sensor_B = sensor_idx[1]
+        try:
+            primary_id_A = str(df_pa.THINGSPEAK_PRIMARY_ID[sensor_A])
+            primary_key_A = df_pa.THINGSPEAK_PRIMARY_ID_READ_KEY[sensor_A]
+            secondary_id_A = str(df_pa.THINGSPEAK_SECONDARY_ID[sensor_A])
+            secondary_key_A = df_pa.THINGSPEAK_SECONDARY_ID_READ_KEY[sensor_A]
+
+            primary_id_B = str(df_pa.THINGSPEAK_PRIMARY_ID[sensor_B])
+            primary_key_B = df_pa.THINGSPEAK_PRIMARY_ID_READ_KEY[sensor_B]
+            secondary_id_B = str(df_pa.THINGSPEAK_SECONDARY_ID[sensor_B])
+            secondary_key_B = df_pa.THINGSPEAK_SECONDARY_ID_READ_KEY[sensor_B]
+
+            ID = [primary_id_A, secondary_id_A, primary_id_B, secondary_id_B]
+            KEYS = [primary_key_A, secondary_key_A, primary_key_B, secondary_key_B]
+            LAT = float(df_pa.Lat[sensor_A])
+            LON = float(df_pa.Lon[sensor_B])
+        except ValueError:
+            print('Name not found. Please check your PurpleAir registration for: ', sensor)
+            ID = [np.nan, np.nan, np.nan, np.nan]
+            KEYS = [np.nan, np.nan, np.nan, np.nan]
+            LAT = np.nan
+            LON = np.nan
     return ID, KEYS, LAT, LON
 
 
@@ -136,7 +163,9 @@ def download_sensor(sensor, sd, ed, down_dir, db=None):
         df_pa = db
     ID, KEYS, LAT, LON = sensor_metadata(df_pa, sensor)
     if ~np.isnan(LON):
-        sensor_A = sensor.replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_')
+        if (type(sensor) is int) or (type(sensor) is np.int64):
+            sensor = df_pa.Label[df_pa.THINGSPEAK_PRIMARY_ID == str(sensor)].item()+'_'+str(sensor)
+        sensor_A = sensor.replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_').replace(',','_')
         sensor_B = sensor_A + '_B'
         sd = sd.replace('-', '_')
         ed = ed.replace('-', '_')
@@ -262,7 +291,7 @@ def build_hdf(name_list, sensor_list, hdfname, tzstr, date_ind, lat, lon):
                 no_b = True
             else:
                 no_b = False
-            sensors.append(sensor_list[i].replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_'))
+            sensors.append(os.path.basename(pa)[8:-26])
             pa = pd.read_csv(pa, skip_blank_lines=False)
             sa = pd.read_csv(sa, skip_blank_lines=False)
             pb = pd.read_csv(pb, skip_blank_lines=False)
@@ -312,7 +341,7 @@ def build_hdf(name_list, sensor_list, hdfname, tzstr, date_ind, lat, lon):
                 pb.iloc[:, 1:] = np.nan
                 sb.iloc[:, 1:] = np.nan
             df_summary = time_master(pa, sa, pb, sb, tzstr, date_ind)
-            sensor = str(os.path.basename(sensors[i]).split('.')[0][0:30])
+            sensor = str(sensors[i][0:30])
             h5file = fill_hdf(h5file, sensor, df_summary, lat[i], lon[i])
             print("Filled HDF for " + sensor)
     h5file.close()
@@ -349,7 +378,7 @@ def sensors_from_csv(csvfile):
 def downloaded_file_list(directory, sensor_list):
     name_list = []
     for i in range(0, len(sensor_list)):
-        search_name = os.path.join(directory, '*_' + sensor_list[i].replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_') + '_*.csv')
+        search_name = os.path.join(directory, '*_' + str(sensor_list[i]).replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_') + '_*.csv')
         name_list_temp = glob.glob(search_name)
         name_list.append(sorted(name_list_temp))
     names = name_list

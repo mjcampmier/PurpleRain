@@ -314,30 +314,37 @@ class PurpleAir:
         models = dict()
         dict_levels = ['PM25', 'PM25-RH', 'PM25-RH-Temp']
         pm25 = np.nanmean(np.array([self.pm25_cf, self.pm25_cf_B]), 0)
-        df = pd.DataFrame([pm25, self.relative_humidty, self.temperature],
-                          index=pd.to_datetime(self.time), columns=[self.name, 'RH', 'Temperature'])
+        df = pd.DataFrame([pm25, self.relative_humidity, self.temperature])
+        df = df.T
+        df.index = pd.to_datetime(self.time)
+        df.index = df.index.tz_localize(source.index[0].tz)
+        df.columns = [self.name, 'RH', 'Temperature']
         df = pd.concat([df, source], axis=1)
-        dt = (df.index[1] - df.index[0]) / 3600.0
+        df = df.dropna(how='any')
+        dt = int((df.index[1] - df.index[0]).seconds / 3600.0)
         if dt < 1:
             print('Sampling frequency is less than 1 hour, please block average to at least 1 hour and try again.')
         else:
-            y = df.iloc[:, -1].values.reshape(-1, 1)
+            y = df.iloc[:, -1].values.flatten()
             syy = syy / np.sqrt(dt)
             x = df.iloc[:, [0, 1, 2]].values
             pm25 = x[:, 0]
             rh = x[:, 1]
             tp = x[:, 2]
-            sxx_pm25 = np.zeros_like(syy)
+            sxx_pm25 = np.zeros_like(pm25)
             sxx_pm25[pm25 <= 100] = 10
             sxx_pm25[pm25 > 100] = pm25[[pm25 > 100]] * 0.1
-            sxx_rh = np.zeros_like(syy) + 3
-            sxx_tp = np.zeros_like(syy) + 1
+            sxx_rh = np.zeros_like(pm25) + 3
+            sxx_tp = np.zeros_like(pm25) + 1
             sxx = np.array([sxx_pm25, sxx_rh, sxx_tp])
             sxx = sxx / np.sqrt(30 * dt)
+            sxx = sxx.T
             for i in range(0, 3):
-                x_train = x.iloc[:, [j for j in range(0, i + 1)]]
-                sxx_train = sxx.iloc[:, [j for j in range(0, i + 1)]]
+                x_train = x[:, [j for j in range(0, i + 1)]]
+                sxx_train = sxx[:, [j for j in range(0, i + 1)]]
                 if i == 0:
+                    x_train = x_train.flatten()
+                    sxx_train = sxx_train.flatten()
                     model = odr.unilinear
                     beta0 = [1, 0]
                 else:
@@ -345,13 +352,8 @@ class PurpleAir:
                     sxx_train = sxx_train.T
                     model = odr.multilinear
                     beta0 = [0]
-                    for j in range(0, i):
+                    for j in range(0, i+1):
                         beta0.insert(0, 1)
-
-                # Deming Fit
-                data_deming = odr.Data(x_train, y, wd=1. / (sxx ** 2), we=1. / (syy ** 2))
-                model_deming = odr.ODR(data_deming, model, beta0=beta0)
-                output_deming = model_deming.run()
 
                 # ODR Fit
                 data_odr = odr.Data(x_train, y)
@@ -362,6 +364,11 @@ class PurpleAir:
                 data_ols = odr.Data(x_train, y, we=1e-12)
                 model_ols = odr.ODR(data_ols, model, beta0=beta0)
                 output_ols = model_ols.run()
+
+                # Deming Fit
+                data_deming = odr.Data(x_train, y, wd=1. / (sxx_train ** 2), we=1. / (syy ** 2))
+                model_deming = odr.ODR(data_deming, model, beta0=beta0)
+                output_deming = model_deming.run()
 
                 models[dict_levels[i]] = {'Deming': output_deming,
                                           'ODR': output_odr,
