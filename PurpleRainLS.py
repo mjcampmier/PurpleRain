@@ -85,9 +85,10 @@ def sensor_metadata(df_pa, sensor):
             LON = np.nan
     elif (type(sensor) is int) or (type(sensor) is np.int64):
         PID = df_pa.THINGSPEAK_PRIMARY_ID.astype(np.int64)
-        sensor_idx = sorted(list(PID[((PID - sensor) <= 4) & ((PID - sensor) >= -4)].index))
-        sensor_A = sensor_idx[0]
-        sensor_B = sensor_idx[1]
+        sensor_idx = PID[PID == sensor].index.item()
+        channel_idx = sorted(list(df_pa[df_pa.Lat == df_pa.Lat[sensor_idx]].index))
+        sensor_A = channel_idx[0]
+        sensor_B = channel_idx[1]
         try:
             primary_id_A = str(df_pa.THINGSPEAK_PRIMARY_ID[sensor_A])
             primary_key_A = df_pa.THINGSPEAK_PRIMARY_ID_READ_KEY[sensor_A]
