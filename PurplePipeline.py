@@ -64,8 +64,8 @@ def axis_lim(y, zero=True):
         return [ymin * sign, ymax]
 
 
-def purpleair_filter(df, threshold=5, LOD=5, upper_cut=100, upper_cut_threshold=0.1, bad_return=np.nan):
-    if (upper_cut < LOD) or (upper_cut < threshold) or (LOD > threshold) or (upper_cut_threshold > 1.0):
+def purpleair_filter(df, threshold=5, lod=5, upper_cut=100, upper_cut_threshold=0.1, bad_return=np.nan):
+    if (upper_cut < lod) or (upper_cut < threshold) or (lod > threshold) or (upper_cut_threshold > 1.0):
         return np.nan
     elif (np.isnan(df.a)) and (np.isnan(df.b)):
         return np.nan
@@ -76,7 +76,7 @@ def purpleair_filter(df, threshold=5, LOD=5, upper_cut=100, upper_cut_threshold=
                 return np.nanmean([df.a, df.b])
             else:
                 return bad_return
-        elif (df.a >= LOD) and (df.b >= LOD):
+        elif (df.a >= lod) and (df.b >= lod):
             raw_res = np.abs(df.a - df.b)
             if raw_res <= 10:
                 return np.nanmean([df.a, df.b])
@@ -116,8 +116,8 @@ def fill_hdf(h5file, sensor, date_ind):
     location.create_dataset('Longitude', data=sensor.lon)
     df = pd.DataFrame([sensor.pm25_cf, sensor.relative_humidity,
                        sensor.temperature, sensor.pressure]).T
-    df.index=pd.to_datetime(date_ind)
-    df.columns=['pm25','rh','temp','pressure']
+    df.index = pd.to_datetime(date_ind)
+    df.columns = ['pm25', 'rh', 'temp', 'pressure']
     location.create_dataset('PM25', data=df.pm25.values, compression="gzip")
     location.create_dataset('Relative_Humidity', data=df.rh.values, compression="gzip")
     location.create_dataset('Temperature', data=df.temp.values, compression="gzip")
@@ -135,6 +135,9 @@ def build_hdf(sensor_network, hdf_name, date_ind):
 
 
 class PurpleAir:
+    __slots__ = ['name', 'time', 'pm25_cf', 'pm25_cf_B',
+                 'temperature', 'relative_humidity', 'pressure', 'lat', 'lon']
+
     def __init__(self, name, time, pm25_cf_a, pm25_cf_b,
                  temperature, relative_humidity, pressure, lat, lon):
         self.name = name
@@ -160,7 +163,7 @@ class PurpleAir:
         df.columns = ['pm25_cf', 'pm25_cf_B', 'temperature', 'relative_humidity', 'pressure']
         df.index = self.time
         if flags is not None:
-            df[flags==1] = np.nan
+            df[flags == 1] = np.nan
         df_block = df.resample(dt).apply(mean_cc)
         df_block = df_block.round(2)
         pa = PurpleAir(self.name, df_block.index.values, df_block.pm25_cf.values,
@@ -214,10 +217,9 @@ class PurpleAir:
         df.mean(axis=1)
         df.index = self.time
         df_med = df.groupby(df.index.hour).apply(np.nanmedian)
-        df_iqr = df.groupby(df.index.hour).apply(lambda x: np.nanpercentile(x, 75) - np.nanpercentile(x, 25))
+        df_iqr = df.groupby(df.index.hour).apply(lambda xp: np.nanpercentile(xp, 75) - np.nanpercentile(xp, 25))
         if plot:
             x = np.linspace(0, 23, 24)
-            y = df_med.values
             y1 = df_med - df_iqr.values
             y2 = df_med + df_iqr.values
             plt.plot(x, df_med, color=[0.5, 0, 0.5], linewidth=2)
@@ -234,14 +236,14 @@ class PurpleAir:
         df_diel.columns = ['Median', 'IQR']
         return df_diel
 
-    def abperformance(self, threshold=5, LOD=5, residuals=False):
+    def abperformance(self, threshold=5, lod=5, residuals=False):
         mask = ((~np.isnan(self.pm25_cf)) & (~np.isnan(self.pm25_cf_B)))
         pm25 = pd.DataFrame([self.pm25_cf, self.pm25_cf_B]).T
         pm25.index = self.time
         pm25.columns = ['a', 'b']
         filtered = pm25.apply(lambda x: purpleair_filter(x,
                                                          threshold=threshold,
-                                                         LOD=LOD,
+                                                         lod=lod,
                                                          bad_return=-99999), axis=1).values
         down = len(filtered[np.isnan(filtered)]) / len(filtered)
         bad = len(filtered[(filtered == -99999)]) / len(filtered)
@@ -299,13 +301,12 @@ class PurpleAir:
 
         return down, bad, good, r2, nrmse
 
-    def qf(self, threshold=5, LOD=5):
-        mask = ((~np.isnan(self.pm25_cf)) & (~np.isnan(self.pm25_cf_B)))
+    def qf(self, threshold=5, lod=5):
         pm25 = pd.DataFrame([self.pm25_cf, self.pm25_cf_B]).T
         pm25.index = self.time
         pm25.columns = ['a', 'b']
         filtered = pm25.apply(lambda x: purpleair_filter(x, threshold=threshold,
-                                                         LOD=LOD, bad_return=np.nan), axis=1).values
+                                                         lod=lod, bad_return=np.nan), axis=1).values
         flag = np.zeros_like(filtered)
         flag[np.isnan(filtered)] = 1
         return flag
@@ -329,8 +330,6 @@ class PurpleAir:
             syy = syy / np.sqrt(dt)
             x = df.iloc[:, [0, 1, 2]].values
             pm25 = x[:, 0]
-            rh = x[:, 1]
-            tp = x[:, 2]
             sxx_pm25 = np.zeros_like(pm25)
             sxx_pm25[pm25 <= 100] = 10
             sxx_pm25[pm25 > 100] = pm25[[pm25 > 100]] * 0.1
@@ -352,7 +351,7 @@ class PurpleAir:
                     sxx_train = sxx_train.T
                     model = odr.multilinear
                     beta0 = [0]
-                    for j in range(0, i+1):
+                    for j in range(0, i + 1):
                         beta0.insert(0, 1)
 
                 # ODR Fit
@@ -377,6 +376,8 @@ class PurpleAir:
 
 
 class PurpleAirNetwork:
+    __slots__ = ['network']
+
     def __init__(self):
         self.network = dict()
 
@@ -415,7 +416,7 @@ class PurpleAirNetwork:
                 n[sensors[i]] = PurpleAir(sensors[i],
                                           time,
                                           pm25,
-                                          np.zeros_like(pm25)*np.nan,
+                                          np.zeros_like(pm25) * np.nan,
                                           temperature,
                                           relative_humidity,
                                           pressure,
@@ -426,7 +427,7 @@ class PurpleAirNetwork:
         self.network = n
         return self
 
-    def abperformance(self, threshold=5, LOD=5, plot=False):
+    def abperformance(self, threshold=5, lod=5, plot=False):
         keys = list(self.network.keys())
         good = np.zeros([len(keys), 1])
         bad = np.zeros([len(keys), 1])
@@ -435,7 +436,7 @@ class PurpleAirNetwork:
         nrmse = np.zeros([len(keys), 1])
         i = 0
         for k in keys:
-            d, b, g, r, nr = self.network[k].abperformance(threshold=threshold, LOD=LOD)
+            d, b, g, r, nr = self.network[k].abperformance(threshold=threshold, lod=lod)
             good[i] = g
             bad[i] = b
             down[i] = d
@@ -490,19 +491,19 @@ class PurpleAirNetwork:
             plt.grid()
         return df_med, df_iqr
 
-    def flags(self, threshold=5, LOD=5):
+    def flags(self, threshold=5, lod=5):
         keys = list(self.network.keys())
         time = self.network[keys[0]].time
         flags = pd.DataFrame(np.zeros([len(time), len(keys)]), columns=keys, index=time)
         i = 0
         for k in keys:
-            f = self.network[k].qf(threshold=threshold, LOD=LOD)
+            f = self.network[k].qf(threshold=threshold, lod=lod)
             flags.iloc[:, i] = f
             i += 1
         return flags
 
-    def quality_control(self, threshold=5, LOD=5, dt='1H', save_file=False, save_name=None):
-        flags = self.flags(threshold=threshold, LOD=LOD)
+    def quality_control(self, threshold=5, lod=5, dt='1H', save_file=False, save_name=None):
+        flags = self.flags(threshold=threshold, lod=lod)
         pa_net_block_qa = self.block_average(dt, flags=flags)
         keys = list(self.network.keys())
         time_ind = pa_net_block_qa.network[keys[0]].time
@@ -511,7 +512,7 @@ class PurpleAirNetwork:
             pm25 = np.nanmean(np.array([sensor.pm25_cf,
                                         sensor.pm25_cf_B]), 0)
             sensor.pm25_cf = pm25
-            sensor.pm25_cf_B = np.zeros_like(pm25)*np.nan
+            sensor.pm25_cf_B = np.zeros_like(pm25) * np.nan
         if save_file and save_name:
             build_hdf(pa_net_block_qa, save_name, time_ind)
         return pa_net_block_qa
@@ -542,10 +543,10 @@ class PurpleAirNetwork:
                                  self.network[k].relative_humidity.T,
                                  self.network[k].temperature.T])
             df_t = df_t.T
-            df_t.columns = [k, k + '_B', k+'_RH', k+'_Temperature']
+            df_t.columns = [k, k + '_B', k + '_RH', k + '_Temperature']
             df_t.index = self.network[k].time
             if drop_b:
-                df_t = df_t.drop([df_t.columns[1]],axis=1)
+                df_t = df_t.drop([df_t.columns[1]], axis=1)
             df = pd.concat([df, df_t], axis=1)
         df.index = df.index.tz_localize(tzstr)
         return df

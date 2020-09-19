@@ -9,6 +9,7 @@ import glob
 import warnings
 import requests
 import shutil as sht
+import time
 
 # anaconda packages
 import numpy as np
@@ -29,30 +30,27 @@ def build_dir(dir_path):
 
 
 def download_database(drop=True):
-    success = False
-    count = 0
-    while count < 10:
-        try:
-            r = requests.get('https://www.purpleair.com/json')
-            all_pa = dict(r.json())
-            df_pa = pd.DataFrame(all_pa['results'])
-            if drop is True:
-                df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
-                            'Flag', 'Hidden',
-                            'ID', 'LastSeen', 'Ozone1',
-                            'PM2_5Value', 'ParentID',
-                            'Stats', 'Type', 'Voc',
-                            'humidity', 'isOwner',
-                            'pressure', 'temp_f',
-                            ], axis=1, inplace=True)
-        except:
-            count += 1
-            success = False
+    trials = 0
+    while trials < 10:
+        r = requests.get('https://www.purpleair.com/json')
+        success = r.ok
+        if success is False:
+            trials += 1
+            time.sleep(3)
         else:
-            success = True
-            print('Database successfully scraped.')
-            count = 100
+            trials = 100
     if success is True:
+        all_pa = dict(r.json())
+        df_pa = pd.DataFrame(all_pa['results'])
+        if drop is True:
+            df_pa.drop(['AGE', 'A_H', 'DEVICE_LOCATIONTYPE',
+                        'Flag', 'Hidden',
+                        'ID', 'LastSeen', 'Ozone1',
+                        'PM2_5Value', 'ParentID',
+                        'Stats', 'Type',
+                        'humidity', 'isOwner',
+                        'pressure', 'temp_f',
+                        ], axis=1, inplace=True)
         return df_pa
     else:
         print('Error connecting to PurpleAir server, check internet connection and retry in 2 minutes.')
@@ -105,7 +103,7 @@ def sensor_metadata(df_pa, sensor):
             LAT = float(df_pa.Lat[sensor_A])
             LON = float(df_pa.Lon[sensor_B])
         except ValueError:
-            print('Name not found. Please check your PurpleAir registration for: ', sensor)
+            print("Name not found. Please check your PurpleAir registration for: ", sensor)
             ID = [np.nan, np.nan, np.nan, np.nan]
             KEYS = [np.nan, np.nan, np.nan, np.nan]
             LAT = np.nan
@@ -165,8 +163,8 @@ def download_sensor(sensor, sd, ed, down_dir, db=None):
     ID, KEYS, LAT, LON = sensor_metadata(df_pa, sensor)
     if ~np.isnan(LON):
         if (type(sensor) is int) or (type(sensor) is np.int64):
-            sensor = df_pa.Label[df_pa.THINGSPEAK_PRIMARY_ID == str(sensor)].item()+'_'+str(sensor)
-        sensor_A = sensor.replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_').replace(',','_')
+            sensor = df_pa.Label[df_pa.THINGSPEAK_PRIMARY_ID == str(sensor)].item() + '_' + str(sensor)
+        sensor_A = sensor.replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_').replace(',', '_')
         sensor_B = sensor_A + '_B'
         sd = sd.replace('-', '_')
         ed = ed.replace('-', '_')
@@ -188,9 +186,15 @@ def download_sensor(sensor, sd, ed, down_dir, db=None):
                               ">=5.0um/dl", ">=10.0um/dl", "PM1.0_ATM_ug/m3", "PM10_ATM_ug/m3"]
         fields = [fields_primary_A, fields_secondary_A,
                   fields_primary_B, fields_secondary_B]
+        full_name = list(map(lambda id_lam, keys_lam, fname_lam: download_request(
+            id_lam, keys_lam, sd, ed, fname_lam, down_dir),
+                             ID, KEYS, fname))
+        map(lambda full, field: assign_field_names(full, field), full_name, fields)
+        """
         for i in range(0, len(ID)):
             full_name = download_request(ID[i], KEYS[i], sd, ed, fname[i], down_dir)
             assign_field_names(full_name, fields[i])
+        """
         print('Successfully downloaded ' + str(sensor))
         return LAT, LON
     else:
@@ -273,7 +277,7 @@ def fill_hdf(h5file, sensor, df, lat, lon):
     return h5file
 
 
-def build_hdf(name_list, sensor_list, hdfname, tzstr, date_ind, lat, lon):
+def build_hdf(name_list, hdfname, tzstr, date_ind, lat, lon):
     h5file = file_hdf(hdfname, np.array(date_ind.to_julian_date()))
     sensors = []
     for i in range(0, len(name_list)):
@@ -379,7 +383,10 @@ def sensors_from_csv(csvfile):
 def downloaded_file_list(directory, sensor_list):
     name_list = []
     for i in range(0, len(sensor_list)):
-        search_name = os.path.join(directory, '*_' + str(sensor_list[i]).replace(' ', '_').replace('/', '_').replace(':', '_').replace('.', '_') + '_*.csv')
+        search_name = os.path.join(directory,
+                                   '*_' + str(sensor_list[i]).replace(' ', '_').replace('/', '_').replace(':',
+                                                                                                          '_').replace(
+                                       '.', '_') + '_*.csv')
         name_list_temp = glob.glob(search_name)
         name_list.append(sorted(name_list_temp))
     names = name_list
@@ -397,11 +404,8 @@ def download_list(sensor_list_file, sd, ed, hdfname, tz):
     sensor_list = pd.read_csv(sensor_list_file, header=None)
     sensor_list = sensor_list.iloc[:, 0]
     df_db = download_database()
-    LAT, LON = [], []
-    for i in range(0, len(sensor_list)):
-        lat, lon = download_sensor(sensor_list[i], sd, ed, hdfname, db=df_db)
-        LAT.append(lat)
-        LON.append(lon)
+    lat_lon = list(map(lambda sensor: download_sensor(sensor, sd, ed, hdfname, db=df_db), sensor_list))
+    LAT, LON = [i[0] for i in lat_lon], [i[1] for i in lat_lon]
     sensor_list = sensor_list[~np.isnan(LAT)].values
     names = downloaded_file_list(dir_name, sensor_list.tolist())
     sd = sd.split('-')
@@ -418,6 +422,6 @@ def download_list(sensor_list_file, sd, ed, hdfname, tz):
                             tz='UTC')
     date_ind = pd.date_range(start_date, end_date, freq='2T')
     date_ind = date_ind.tz_convert(tz)
-    build_hdf(names, sensor_list, hdfname, tz, date_ind, LAT, LON)
+    build_hdf(names, hdfname, tz, date_ind, LAT, LON)
     hdf5_to_mat(hdfname + '.h5')
     print('Successfully downloaded all sensors.')
