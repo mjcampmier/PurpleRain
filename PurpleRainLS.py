@@ -405,7 +405,9 @@ def download_list(sensor_list_file, sd, ed, hdfname, tz):
         sensor_list = pd.read_csv(sensor_list_file, header=None)
         sensor_list = sensor_list.iloc[:, 0]
     elif type(sensor_list_file) == pd.core.frame.DataFrame:
-        sensor_list = sensor_list_file.iloc[:, 0]
+        sensor_list = sensor_list_file.Label
+    else:
+        sensor_list = None
     df_db = download_database()
     lat_lon = list(map(lambda sensor: download_sensor(sensor, sd, ed, hdfname, db=df_db), sensor_list))
     LAT, LON = [i[0] for i in lat_lon], [i[1] for i in lat_lon]
