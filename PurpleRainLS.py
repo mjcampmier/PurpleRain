@@ -401,8 +401,11 @@ def h5file_query(h5file, query_string):
 
 def download_list(sensor_list_file, sd, ed, hdfname, tz):
     dir_name = build_dir(hdfname)
-    sensor_list = pd.read_csv(sensor_list_file, header=None)
-    sensor_list = sensor_list.iloc[:, 0]
+    if type(sensor_list_file) == str:
+        sensor_list = pd.read_csv(sensor_list_file, header=None)
+        sensor_list = sensor_list.iloc[:, 0]
+    elif type(sensor_list_file) == pd.core.frame.DataFrame:
+        sensor_list = sensor_list_file.iloc[:, 0]
     df_db = download_database()
     lat_lon = list(map(lambda sensor: download_sensor(sensor, sd, ed, hdfname, db=df_db), sensor_list))
     LAT, LON = [i[0] for i in lat_lon], [i[1] for i in lat_lon]
